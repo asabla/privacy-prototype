@@ -697,6 +697,31 @@ a:hover { border-bottom-color: var(--cyan); }
   font-variant-numeric: tabular-nums;
 }
 
+.notify-toggle {
+  color: var(--text-muted);
+  border-color: var(--border-strong);
+  position: relative;
+}
+.notify-toggle:hover { color: var(--text); }
+.notify-toggle.on {
+  color: #fcd39b;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.38);
+}
+.notify-toggle.on:hover {
+  background: rgba(245, 158, 11, 0.18);
+}
+.notify-toggle.on::after {
+  content: "";
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
 [hidden] { display: none !important; }
 
 .live-indicator {
@@ -817,9 +842,11 @@ a:hover { border-bottom-color: var(--cyan); }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 60;
+  z-index: 35;  /* below the drawer (50) so inspection is never covered */
   pointer-events: none;
 }
+/* Hide any in-flight toasts while the detail drawer is open. */
+body.drawer-open .toast-stack { display: none; }
 .toast {
   pointer-events: auto;
   display: flex;

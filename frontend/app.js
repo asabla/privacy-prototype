@@ -40,6 +40,10 @@ const state = {
   },
   // Cached live aggregate (updated incrementally each time a result is added).
   aggregates: null,
+  // Toast alerts — off by default; user opts in via the header toggle.
+  notify: false,
+  // Flipped while the detail drawer is open, so we never pile toasts over it.
+  drawerOpen: false,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -556,6 +560,7 @@ function updateSimButtons() {
 // ---------- Toasts ----------
 
 function leakToast(r) {
+  if (!state.notify || state.drawerOpen) return;
   const e = r.email;
   const host = $("#toastStack");
   const toast = document.createElement("div");
@@ -588,6 +593,7 @@ function leakToast(r) {
 }
 
 function toastDone() {
+  if (!state.notify || state.drawerOpen) return;
   const host = $("#toastStack");
   const toast = document.createElement("div");
   toast.className = "toast toast-done";
@@ -646,6 +652,10 @@ function openDrawer(id) {
   // Try current results first; fall back to allResults so deep links work before simulation finishes.
   const r = state.results.find((x) => x.email.id === id) || state.allResults.find((x) => x.email.id === id);
   if (!r) return;
+  state.drawerOpen = true;
+  document.body.classList.add("drawer-open");
+  // Dismiss any toasts already in flight so nothing lingers over the inspection view.
+  document.querySelectorAll("#toastStack .toast").forEach(dismissToast);
   const drawer = $("#drawer");
   const backdrop = $("#drawerBackdrop");
   drawer.setAttribute("aria-hidden", "false");
@@ -654,6 +664,8 @@ function openDrawer(id) {
 }
 
 function closeDrawer() {
+  state.drawerOpen = false;
+  document.body.classList.remove("drawer-open");
   $("#drawer").setAttribute("aria-hidden", "true");
   $("#drawerBackdrop").hidden = true;
 }
@@ -830,6 +842,26 @@ $("#speedSeg").addEventListener("click", (e) => {
   state.sim.speed = Number(btn.dataset.speed);
   document.querySelectorAll("#speedSeg button").forEach((b) => b.classList.toggle("active", b === btn));
 });
+
+$("#notifyToggle").addEventListener("click", () => {
+  state.notify = !state.notify;
+  updateNotifyToggle();
+  if (!state.notify) {
+    document.querySelectorAll("#toastStack .toast").forEach(dismissToast);
+  }
+});
+
+function updateNotifyToggle() {
+  const btn = $("#notifyToggle");
+  const on = state.notify;
+  btn.classList.toggle("on", on);
+  btn.setAttribute("aria-pressed", String(on));
+  btn.title = on
+    ? "Alerts on — click to silence leak notifications"
+    : "Alerts off — click to enable leak notifications";
+  btn.querySelector(".icon-bell-off").hidden = on;
+  btn.querySelector(".icon-bell-on").hidden = !on;
+}
 
 $("#drawerClose").addEventListener("click", closeDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDrawer);
