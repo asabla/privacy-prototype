@@ -1,0 +1,13 @@
+[project]
+name = "privacy-detector"
+version = "0.1.0"
+description = "Email privacy scanner over OpenAI privacy-filter"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.5",
+]
+
+[tool.uv]
+package = false
