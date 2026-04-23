@@ -33,10 +33,27 @@
           <span class="pulse"></span>
           <span id="engineLabel">Loading engine…</span>
         </div>
-        <button class="btn btn-primary" id="rescanBtn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
-          <span>Re-scan all</span>
-        </button>
+        <div class="live-indicator" id="liveIndicator" hidden>
+          <span class="live-dot"></span>
+          <span class="live-text"><span id="liveCount">0</span>/<span id="liveTotal">0</span> · live</span>
+        </div>
+        <div class="sim-controls" id="simControls">
+          <button class="btn btn-primary btn-icon" id="simPlay" title="Start / pause simulation">
+            <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" hidden><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+            <span id="simPlayLabel">Start</span>
+          </button>
+          <button class="btn btn-icon" id="simRestart" title="Restart simulation" disabled>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+          </button>
+          <div class="segmented speed-seg" id="speedSeg" title="Simulation speed">
+            <button data-speed="0.5">0.5×</button>
+            <button data-speed="1" class="active">1×</button>
+            <button data-speed="2">2×</button>
+            <button data-speed="4">4×</button>
+          </div>
+          <button class="btn" id="loadAllBtn" title="Skip simulation and load everything">Load all</button>
+        </div>
       </div>
     </header>
 
@@ -101,6 +118,9 @@
         <div class="legend" id="legend"></div>
       </footer>
     </main>
+
+    <!-- Toast stack (leak alerts) -->
+    <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Slide-in detail drawer -->
     <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>

@@ -672,3 +672,252 @@ a:hover { border-bottom-color: var(--cyan); }
   border-radius: 4px;
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ---------- Simulation controls ---------- */
+
+.sim-controls {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.btn-icon {
+  padding: 7px 12px;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.btn-icon svg { flex-shrink: 0; }
+.btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.speed-seg button {
+  min-width: 32px;
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+[hidden] { display: none !important; }
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(251, 113, 133, 0.1);
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.live-indicator.paused {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: var(--text-muted);
+}
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+.live-indicator.paused .live-dot { animation: none; box-shadow: none; opacity: 0.6; }
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.6); }
+}
+
+/* ---------- Email-row entrance / scan sweep ---------- */
+
+.email-row {
+  position: relative;
+  overflow: hidden;
+}
+
+.email-row.is-new {
+  opacity: 0;
+  transform: translateY(-6px);
+  background: rgba(34, 211, 238, 0.04);
+}
+.email-row.is-new.entered {
+  opacity: 1;
+  transform: translateY(0);
+  background: transparent;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), background 1.6s ease;
+}
+.email-row.row-leak.is-new.entered {
+  background: rgba(239, 68, 68, 0.08);
+  animation: leak-glow 2.4s ease forwards;
+}
+@keyframes leak-glow {
+  0%   { background: rgba(239, 68, 68, 0.18); box-shadow: inset 2px 0 0 rgba(239, 68, 68, 0.8); }
+  100% { background: transparent; box-shadow: inset 2px 0 0 transparent; }
+}
+
+.scanline {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.08) 40%,
+    rgba(34, 211, 238, 0.25) 50%,
+    rgba(34, 211, 238, 0.08) 60%,
+    transparent 100%);
+  transform: translateX(-100%);
+  animation: sweep 0.9s ease-out forwards;
+}
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* Dir icon pulse on new rows */
+.email-row.is-new .dir-icon {
+  animation: dir-bump 0.6s ease;
+}
+@keyframes dir-bump {
+  0%   { transform: scale(0.6); opacity: 0.3; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* KPI bump when value changes */
+.kpi { transition: border-color 0.3s ease; }
+.kpi.kpi-bump {
+  animation: kpi-bump 0.6s ease;
+}
+@keyframes kpi-bump {
+  0%   { border-color: var(--border); }
+  40%  { border-color: rgba(34, 211, 238, 0.45); }
+  100% { border-color: var(--border); }
+}
+.kpi.kpi-danger.kpi-bump { animation-name: kpi-bump-danger; }
+@keyframes kpi-bump-danger {
+  0%   { border-color: var(--border); }
+  40%  { border-color: rgba(239, 68, 68, 0.55); box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08); }
+  100% { border-color: var(--border); box-shadow: none; }
+}
+
+/* Label bar transitions */
+.bar-fill { transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.bar-count { transition: color 0.3s ease; }
+
+/* Split segment transitions */
+.split-seg { transition: flex 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* ---------- Toast stack ---------- */
+
+.toast-stack {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 60;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 380px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(12, 16, 25, 0.96);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  animation: toast-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  overflow: hidden;
+}
+.toast::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: currentColor;
+}
+.toast-leak {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  background:
+    linear-gradient(90deg, rgba(239, 68, 68, 0.12), transparent 40%),
+    rgba(12, 16, 25, 0.96);
+}
+.toast-done {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+.toast-icon { flex-shrink: 0; margin-top: 1px; }
+.toast-body { flex: 1; min-width: 0; color: var(--text); }
+.toast-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: currentColor;
+  letter-spacing: -0.005em;
+}
+.toast-leak .toast-title, .toast-done .toast-title { color: currentColor; }
+.toast-sub {
+  font-size: 12.5px;
+  color: var(--text);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toast-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toast-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+.toast-close:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+.toast-exit {
+  animation: toast-out 0.25s ease forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(30px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateX(30px); }
+}
+
+/* Empty inbox state */
+.email-list:empty::before {
+  content: "Press ▶ to start the simulation — emails will stream in live.";
+  display: block;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Topbar spacing tweak for the added controls */
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 18px; }
+  .topbar-right { flex-wrap: wrap; gap: 8px; }
+  .speed-seg { display: none; }
+}

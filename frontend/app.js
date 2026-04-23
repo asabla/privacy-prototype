@@ -26,55 +26,59 @@ const state = {
   engine: null,
   engineDetail: null,
   internalDomains: [],
-  aggregates: null,
+  // The full scanned corpus (fetched once), used as the source for simulation.
+  allResults: [],
+  // Currently shown results (grows during simulation).
   results: [],
   filter: "all",
+  // Simulation state.
+  sim: {
+    mode: "idle",          // "idle" | "running" | "paused" | "done"
+    queue: [],             // remaining results to reveal
+    speed: 1,
+    timer: null,
+  },
+  // Cached live aggregate (updated incrementally each time a result is added).
+  aggregates: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
 
 async function loadAll() {
-  const [engine, config] = await Promise.all([
+  const [engine, config, scan] = await Promise.all([
     fetch("/api/engine").then((r) => r.json()),
     fetch("/api/config").then((r) => r.json()),
+    fetch("/api/scan-all").then((r) => r.json()),
   ]);
   state.engine = engine.engine;
   state.engineDetail = engine.detail;
   state.internalDomains = config.internal_domains;
+  state.allResults = scan.results;
+
   renderEngineBadge();
   renderLegend();
   renderFooter();
-  await scanAll();
-}
+  renderScaffold();
+  resetDisplay();
 
-async function scanAll() {
-  const btn = $("#rescanBtn");
-  btn.disabled = true;
-  btn.querySelector("span").textContent = "Scanning…";
-  try {
-    const data = await fetch("/api/scan-all").then((r) => r.json());
-    state.aggregates = data.aggregates;
-    state.results = data.results;
-    renderKpis();
-    renderLabelBars();
-    renderSplitChart();
-    renderEmailList();
-    const params = new URLSearchParams(location.search);
-    const autoId = params.get("email");
-    if (autoId) {
-      openDrawer(autoId);
-      if (params.get("view") === "redacted") {
-        setTimeout(() => {
-          const btn = document.querySelector('#viewToggle button[data-mode="redacted"]');
-          btn && btn.click();
-        }, 50);
-      }
+  // If the user deep-linked to a specific email, skip simulation and load everything.
+  const params = new URLSearchParams(location.search);
+  if (params.get("email")) {
+    loadAllInstant();
+    openDrawer(params.get("email"));
+    if (params.get("view") === "redacted") {
+      setTimeout(() => {
+        const btn = document.querySelector('#viewToggle button[data-mode="redacted"]');
+        btn && btn.click();
+      }, 50);
     }
-  } finally {
-    btn.disabled = false;
-    btn.querySelector("span").textContent = "Re-scan all";
+  } else {
+    // Autoplay the simulation shortly after page load so the user sees it breathe.
+    setTimeout(() => simPlay(), 600);
   }
 }
+
+// ---------- Engine badge / legend / footer ----------
 
 function renderEngineBadge() {
   const badge = $("#engineBadge");
@@ -103,88 +107,179 @@ function renderLegend() {
   }).join("");
 }
 
-function renderKpis() {
-  const a = state.aggregates;
-  const cards = [
-    { label: "Total emails",   value: a.total,               sub: `${a.inbound} in · ${a.outbound} out · ${a.internal} internal`, cls: "" },
-    { label: "Sensitive",      value: a.sensitive,           sub: `${pct(a.sensitive, a.total)}% of inbox`,                         cls: "kpi-warn" },
-    { label: "Outbound leaks", value: a.leaks_out,           sub: "sensitive → external recipient",                                 cls: "kpi-danger" },
-    { label: "Inbound PII",    value: a.sensitive_inbound,   sub: "external → internal with PII",                                   cls: "kpi-accent" },
-    { label: "Boundary crossings", value: a.crossing_boundary, sub: "internal ↔ external",                                          cls: "" },
-    { label: "PII spans",      value: Object.values(a.by_label).reduce((s, n) => s + n, 0), sub: `across ${Object.keys(a.by_label).length} categories`, cls: "kpi-ok" },
-  ];
-  $("#kpis").innerHTML = cards
-    .map((c) => `
-      <div class="kpi ${c.cls}">
-        <div class="label">${c.label}</div>
-        <div class="value">${c.value}</div>
-        <div class="sub">${c.sub}</div>
-      </div>
-    `)
-    .join("");
-}
+// ---------- Scaffolding (done once) ----------
 
-function renderLabelBars() {
-  const counts = state.aggregates.by_label;
-  const max = Math.max(1, ...Object.values(counts));
-  const rows = LABEL_ORDER.map((k) => {
-    const n = counts[k] || 0;
-    const pctW = (n / max) * 100;
+/** Build the KPI / bars / split-chart DOM once so later updates can animate in place. */
+function renderScaffold() {
+  // KPIs
+  const kpiDefs = [
+    { key: "total",         label: "Total emails",         sub: "", cls: "" },
+    { key: "sensitive",     label: "Sensitive",            sub: "", cls: "kpi-warn" },
+    { key: "leaks_out",     label: "Outbound leaks",       sub: "sensitive → external recipient", cls: "kpi-danger" },
+    { key: "sensitive_inbound", label: "Inbound PII",      sub: "external → internal with PII", cls: "kpi-accent" },
+    { key: "crossing_boundary", label: "Boundary crossings", sub: "internal ↔ external", cls: "" },
+    { key: "spans",         label: "PII spans",            sub: "across categories", cls: "kpi-ok" },
+  ];
+  $("#kpis").innerHTML = kpiDefs.map((c) => `
+    <div class="kpi ${c.cls}" data-key="${c.key}">
+      <div class="label">${c.label}</div>
+      <div class="value" data-value="0">0</div>
+      <div class="sub" data-sub>${c.sub}</div>
+    </div>
+  `).join("");
+
+  // PII label bars
+  $("#labelBars").innerHTML = LABEL_ORDER.map((k) => {
     const m = LABEL_META[k];
     return `
-      <div class="bar-row" style="color:${m.hex}">
+      <div class="bar-row" data-label="${k}" style="color:${m.hex}">
         <div class="bar-label"><span class="bar-dot"></span>${m.short}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${pctW}%"></div></div>
-        <div class="bar-count">${n}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:0%"></div></div>
+        <div class="bar-count">0</div>
       </div>
     `;
   }).join("");
-  $("#labelBars").innerHTML = rows;
+
+  // Split chart
+  $("#splitChart").innerHTML = [
+    { id: "sens-clean", title: "Sensitive vs clean", left: "sensitive", right: "clean", leftClass: "sens", rightClass: "safe" },
+    { id: "leak-safe",  title: "Outbound leaks vs safe outbound", left: "leaks", right: "safe", leftClass: "leak", rightClass: "safe" },
+    { id: "int-ext",    title: "Traffic by recipient", left: "internal-only", right: "external", leftClass: "internal-seg", rightClass: "external-seg" },
+  ].map((r) => `
+    <div class="split-row" data-id="${r.id}">
+      <div class="split-row-header">
+        <span>${r.title}</span>
+        <span><span class="n" data-left>0</span> / <span data-total>0</span></span>
+      </div>
+      <div class="split-bar">
+        <div class="split-seg ${r.leftClass}" data-seg="left" style="flex:0"></div>
+        <div class="split-seg ${r.rightClass}" data-seg="right" style="flex:0"></div>
+      </div>
+      <div class="split-row-header" style="font-size:11px">
+        <span>${r.left}</span>
+        <span>${r.right}</span>
+      </div>
+    </div>
+  `).join("");
 }
 
-function renderSplitChart() {
-  const a = state.aggregates;
-  const rows = [
-    {
-      title: "Sensitive vs clean",
-      left:  { label: "sensitive", n: a.sensitive,            className: "sens" },
-      right: { label: "clean",     n: a.total - a.sensitive,  className: "safe" },
-    },
-    {
-      title: "Outbound leaks vs safe outbound",
-      left:  { label: "leaks",   n: a.leaks_out,              className: "leak" },
-      right: { label: "safe",    n: a.outbound - a.leaks_out, className: "safe" },
-    },
-    {
-      title: "Traffic by recipient",
-      left:  { label: "internal-only", n: a.total - a.crossing_boundary, className: "internal-seg" },
-      right: { label: "external",      n: a.crossing_boundary,           className: "external-seg" },
-    },
-  ];
-  $("#splitChart").innerHTML = rows
-    .map((r) => {
-      const total = Math.max(1, r.left.n + r.right.n);
-      const lw = (r.left.n / total) * 100;
-      const rw = (r.right.n / total) * 100;
-      return `
-        <div class="split-row">
-          <div class="split-row-header">
-            <span>${r.title}</span>
-            <span><span class="n">${r.left.n}</span> / ${r.left.n + r.right.n}</span>
-          </div>
-          <div class="split-bar">
-            <div class="split-seg ${r.left.className}" style="flex:${lw}"></div>
-            <div class="split-seg ${r.right.className}" style="flex:${rw}"></div>
-          </div>
-          <div class="split-row-header" style="font-size:11px">
-            <span>${r.left.label}</span>
-            <span>${r.right.label}</span>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+// ---------- Aggregates ----------
+
+function emptyAggregates() {
+  return {
+    total: 0, inbound: 0, outbound: 0, internal: 0,
+    sensitive: 0, sensitive_inbound: 0, sensitive_outbound: 0, sensitive_internal: 0,
+    crossing_boundary: 0, leaks_out: 0,
+    by_label: {},
+  };
 }
+
+function updateAggregate(agg, r) {
+  const e = r.email;
+  const c = r.classification;
+  agg.total += 1;
+  agg[e.direction] = (agg[e.direction] || 0) + 1;
+  if (c.crosses_boundary) agg.crossing_boundary += 1;
+  if (r.scan.is_sensitive) {
+    agg.sensitive += 1;
+    agg["sensitive_" + e.direction] = (agg["sensitive_" + e.direction] || 0) + 1;
+    if (e.direction === "outbound" && !c.all_recipients_internal) agg.leaks_out += 1;
+  }
+  for (const [label, n] of Object.entries(r.scan.by_label)) {
+    agg.by_label[label] = (agg.by_label[label] || 0) + n;
+  }
+}
+
+// ---------- Incremental renderers ----------
+
+function renderKpis(prev, next) {
+  const spansOf = (a) => Object.values(a.by_label).reduce((s, n) => s + n, 0);
+  const values = {
+    total: next.total,
+    sensitive: next.sensitive,
+    leaks_out: next.leaks_out,
+    sensitive_inbound: next.sensitive_inbound,
+    crossing_boundary: next.crossing_boundary,
+    spans: spansOf(next),
+  };
+  const prevValues = {
+    total: prev.total,
+    sensitive: prev.sensitive,
+    leaks_out: prev.leaks_out,
+    sensitive_inbound: prev.sensitive_inbound,
+    crossing_boundary: prev.crossing_boundary,
+    spans: spansOf(prev),
+  };
+  document.querySelectorAll(".kpi").forEach((el) => {
+    const key = el.dataset.key;
+    const to = values[key];
+    const from = prevValues[key];
+    const valEl = el.querySelector(".value");
+    if (from !== to) {
+      animateNumber(valEl, from, to, 500);
+      el.classList.remove("kpi-bump");
+      void el.offsetWidth;
+      el.classList.add("kpi-bump");
+    }
+    const subEl = el.querySelector("[data-sub]");
+    if (key === "total") {
+      subEl.textContent = `${next.inbound} in · ${next.outbound} out · ${next.internal} internal`;
+    } else if (key === "sensitive") {
+      subEl.textContent = next.total ? `${Math.round((next.sensitive / next.total) * 100)}% of inbox` : "0% of inbox";
+    } else if (key === "spans") {
+      subEl.textContent = `across ${Object.keys(next.by_label).length} categor${Object.keys(next.by_label).length === 1 ? "y" : "ies"}`;
+    }
+  });
+}
+
+function renderLabelBars(agg) {
+  const counts = agg.by_label;
+  const max = Math.max(1, ...Object.values(counts), 1);
+  document.querySelectorAll(".bar-row").forEach((row) => {
+    const k = row.dataset.label;
+    const n = counts[k] || 0;
+    row.querySelector(".bar-fill").style.width = `${(n / max) * 100}%`;
+    row.querySelector(".bar-count").textContent = n;
+  });
+}
+
+function renderSplitChart(agg) {
+  const data = {
+    "sens-clean": { left: agg.sensitive, right: Math.max(0, agg.total - agg.sensitive) },
+    "leak-safe":  { left: agg.leaks_out, right: Math.max(0, agg.outbound - agg.leaks_out) },
+    "int-ext":    { left: Math.max(0, agg.total - agg.crossing_boundary), right: agg.crossing_boundary },
+  };
+  for (const [id, { left, right }] of Object.entries(data)) {
+    const row = document.querySelector(`.split-row[data-id="${id}"]`);
+    if (!row) continue;
+    const total = Math.max(1, left + right);
+    row.querySelector('[data-seg="left"]').style.flex  = String((left  / total) * 100 || 0.0001);
+    row.querySelector('[data-seg="right"]').style.flex = String((right / total) * 100 || 0.0001);
+    row.querySelector("[data-left]").textContent = left;
+    row.querySelector("[data-total]").textContent = left + right;
+  }
+}
+
+function renderStreamSub() {
+  const total = state.allResults.length;
+  const shown = state.results.length;
+  const sub = $("#streamSub");
+  if (state.sim.mode === "running") sub.textContent = `Receiving live · ${shown}/${total}`;
+  else if (state.sim.mode === "paused") sub.textContent = `Paused · ${shown}/${total}`;
+  else if (state.sim.mode === "done") sub.textContent = `Simulation complete · ${shown} messages processed`;
+  else sub.textContent = `${shown}/${total} messages`;
+}
+
+function updateLiveIndicator() {
+  const el = $("#liveIndicator");
+  const running = state.sim.mode === "running";
+  el.hidden = !(running || state.sim.mode === "paused");
+  el.classList.toggle("paused", state.sim.mode === "paused");
+  $("#liveCount").textContent = state.results.length;
+  $("#liveTotal").textContent = state.allResults.length;
+}
+
+// ---------- Email list ----------
 
 function filteredResults() {
   const f = state.filter;
@@ -202,14 +297,50 @@ function filteredResults() {
 function renderEmailList() {
   const list = $("#emailList");
   const results = filteredResults();
-  $("#streamSub").textContent = `Showing ${results.length} of ${state.results.length} messages`;
-  list.innerHTML = results.map((r) => emailRow(r)).join("");
-  list.querySelectorAll(".email-row").forEach((el) => {
+  list.innerHTML = results.map((r) => emailRowHtml(r, false)).join("");
+  attachRowHandlers(list);
+  renderStreamSub();
+}
+
+function prependEmailRow(r) {
+  // Respect filter: only insert if the row passes the filter.
+  if (!passesFilter(r)) return;
+  const list = $("#emailList");
+  const tmp = document.createElement("div");
+  tmp.innerHTML = emailRowHtml(r, true);
+  const row = tmp.firstElementChild;
+  list.insertBefore(row, list.firstChild);
+  attachRowHandlers(row);
+  // Trigger entrance animation after mount.
+  requestAnimationFrame(() => {
+    row.classList.add("entered");
+  });
+  // Remove scanline overlay once its animation finishes.
+  const line = row.querySelector(".scanline");
+  if (line) line.addEventListener("animationend", () => line.remove(), { once: true });
+}
+
+function passesFilter(r) {
+  const f = state.filter;
+  if (f === "all") return true;
+  if (f === "sensitive") return r.scan.is_sensitive;
+  if (f === "leaks") return r.email.direction === "outbound" && !r.classification.all_recipients_internal && r.scan.is_sensitive;
+  if (f === "inbound") return r.email.direction === "inbound";
+  if (f === "outbound") return r.email.direction === "outbound";
+  if (f === "internal") return r.email.direction === "internal";
+  return true;
+}
+
+function attachRowHandlers(root) {
+  const rows = root instanceof Element && root.classList.contains("email-row")
+    ? [root]
+    : root.querySelectorAll(".email-row");
+  rows.forEach((el) => {
     el.addEventListener("click", () => openDrawer(el.dataset.id));
   });
 }
 
-function emailRow(r) {
+function emailRowHtml(r, live) {
   const e = r.email;
   const dir = e.direction;
   const dirIcon = dirGlyph(dir);
@@ -223,8 +354,12 @@ function emailRow(r) {
                       : r.scan.is_sensitive ? { label: "Sensitive", cls: "sensitive" }
                       : { label: "Clean", cls: "clean" };
   const dots = piiDots(r.scan.by_label);
+  const liveCls = live ? " is-new" : "";
+  const leakCls = isLeak ? " row-leak" : "";
+  const scanline = live ? `<div class="scanline"></div>` : "";
   return `
-    <div class="email-row" data-id="${e.id}">
+    <div class="email-row${liveCls}${leakCls}" data-id="${e.id}">
+      ${scanline}
       <div class="dir-icon ${dir}" title="${dir}">${dirIcon}</div>
       <div class="email-addr">
         <div class="addr-primary">${escape(nameFor(primary))}</div>
@@ -282,15 +417,234 @@ function escape(s) {
     .replaceAll('"', "&quot;");
 }
 
-function pct(n, total) {
-  if (!total) return 0;
-  return Math.round((n / total) * 100);
+// ---------- Simulation engine ----------
+
+function resetDisplay() {
+  state.results = [];
+  state.aggregates = emptyAggregates();
+  renderKpis(emptyAggregates(), state.aggregates);
+  renderLabelBars(state.aggregates);
+  renderSplitChart(state.aggregates);
+  renderEmailList();
+  renderStreamSub();
+  updateLiveIndicator();
 }
 
-// ------ Drawer ------
+function shuffled(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function simPlay() {
+  if (state.sim.mode === "running") return;
+  if (state.sim.mode === "idle" || state.sim.mode === "done") {
+    // Fresh start.
+    resetDisplay();
+    state.sim.queue = shuffled(state.allResults);
+  }
+  state.sim.mode = "running";
+  updateSimButtons();
+  updateLiveIndicator();
+  renderStreamSub();
+  scheduleNextEvent();
+}
+
+function simPause() {
+  if (state.sim.mode !== "running") return;
+  state.sim.mode = "paused";
+  if (state.sim.timer) { clearTimeout(state.sim.timer); state.sim.timer = null; }
+  updateSimButtons();
+  updateLiveIndicator();
+  renderStreamSub();
+}
+
+function simRestart() {
+  if (state.sim.timer) { clearTimeout(state.sim.timer); state.sim.timer = null; }
+  state.sim.mode = "idle";
+  resetDisplay();
+  updateSimButtons();
+  // Kick off a fresh run.
+  simPlay();
+}
+
+function scheduleNextEvent() {
+  if (state.sim.mode !== "running") return;
+  if (state.sim.queue.length === 0) {
+    state.sim.mode = "done";
+    updateSimButtons();
+    updateLiveIndicator();
+    renderStreamSub();
+    toastDone();
+    return;
+  }
+  const base = 300 + Math.random() * 900;     // 300–1200ms per tick
+  const delay = base / state.sim.speed;
+  state.sim.timer = setTimeout(() => {
+    const r = state.sim.queue.shift();
+    revealResult(r);
+    scheduleNextEvent();
+  }, delay);
+}
+
+function revealResult(r) {
+  const prev = state.aggregates;
+  const next = JSON.parse(JSON.stringify(prev));
+  updateAggregate(next, r);
+  state.aggregates = next;
+  state.results.unshift(r);
+
+  prependEmailRow(r);
+  renderKpis(prev, next);
+  renderLabelBars(next);
+  renderSplitChart(next);
+  renderStreamSub();
+  updateLiveIndicator();
+
+  if (r.email.direction === "outbound" && r.scan.is_sensitive && !r.classification.all_recipients_internal) {
+    leakToast(r);
+  }
+}
+
+function loadAllInstant() {
+  if (state.sim.timer) { clearTimeout(state.sim.timer); state.sim.timer = null; }
+  state.sim.mode = "done";
+  state.sim.queue = [];
+  state.results = [...state.allResults];
+  const agg = emptyAggregates();
+  for (const r of state.allResults) updateAggregate(agg, r);
+  const prev = state.aggregates || emptyAggregates();
+  state.aggregates = agg;
+  renderEmailList();
+  renderKpis(prev, agg);
+  renderLabelBars(agg);
+  renderSplitChart(agg);
+  renderStreamSub();
+  updateLiveIndicator();
+  updateSimButtons();
+}
+
+function updateSimButtons() {
+  const playBtn = $("#simPlay");
+  const playIcon = playBtn.querySelector(".icon-play");
+  const pauseIcon = playBtn.querySelector(".icon-pause");
+  const label = $("#simPlayLabel");
+  if (state.sim.mode === "running") {
+    playIcon.hidden = true; pauseIcon.hidden = false;
+    label.textContent = "Pause";
+    playBtn.title = "Pause simulation";
+  } else if (state.sim.mode === "done") {
+    playIcon.hidden = false; pauseIcon.hidden = true;
+    label.textContent = "Replay";
+    playBtn.title = "Replay simulation";
+  } else if (state.sim.mode === "paused") {
+    playIcon.hidden = false; pauseIcon.hidden = true;
+    label.textContent = "Resume";
+    playBtn.title = "Resume simulation";
+  } else {
+    playIcon.hidden = false; pauseIcon.hidden = true;
+    label.textContent = "Start";
+    playBtn.title = "Start simulation";
+  }
+  const hasData = state.results.length > 0;
+  $("#simRestart").disabled = !hasData && state.sim.mode !== "running" && state.sim.mode !== "paused";
+}
+
+// ---------- Toasts ----------
+
+function leakToast(r) {
+  const e = r.email;
+  const host = $("#toastStack");
+  const toast = document.createElement("div");
+  toast.className = "toast toast-leak";
+  const topLabel = Object.keys(r.scan.by_label)
+    .sort((a, b) => LABEL_ORDER.indexOf(a) - LABEL_ORDER.indexOf(b))[0] || "secret";
+  const labelName = LABEL_META[topLabel]?.short || "PII";
+  toast.innerHTML = `
+    <div class="toast-icon" style="color:${LABEL_META[topLabel]?.hex || "#ef4444"}">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-title">Outbound leak detected · ${labelName}</div>
+      <div class="toast-sub">${escape(e.subject)}</div>
+      <div class="toast-meta mono">${escape(e.sender)} → ${escape(e.recipients.map(short).join(", "))}</div>
+    </div>
+    <button class="toast-close" aria-label="Dismiss">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  `;
+  toast.querySelector(".toast-close").addEventListener("click", () => dismissToast(toast));
+  toast.addEventListener("click", (ev) => {
+    if (ev.target.closest(".toast-close")) return;
+    openDrawer(e.id);
+    dismissToast(toast);
+  });
+  host.appendChild(toast);
+  // Auto-dismiss
+  setTimeout(() => dismissToast(toast), 5200);
+}
+
+function toastDone() {
+  const host = $("#toastStack");
+  const toast = document.createElement("div");
+  toast.className = "toast toast-done";
+  toast.innerHTML = `
+    <div class="toast-icon" style="color:#6ee7b7">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-title">Simulation complete</div>
+      <div class="toast-sub">${state.aggregates.total} processed · ${state.aggregates.leaks_out} outbound leak${state.aggregates.leaks_out === 1 ? "" : "s"}</div>
+    </div>
+  `;
+  host.appendChild(toast);
+  setTimeout(() => dismissToast(toast), 4200);
+}
+
+function dismissToast(el) {
+  if (!el || !el.parentNode) return;
+  el.classList.add("toast-exit");
+  el.addEventListener("animationend", () => el.remove(), { once: true });
+}
+
+// ---------- Number tick animation ----------
+
+function animateNumber(el, from, to, duration) {
+  if (el.__rafCancel) cancelAnimationFrame(el.__rafCancel);
+  if (el.__fallback) clearTimeout(el.__fallback);
+  if (!Number.isFinite(from)) from = to;
+  el.textContent = from;
+  const t0 = performance.now();
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  const tick = (now) => {
+    const raw = (now - t0) / Math.max(1, duration);
+    const t = Math.max(0, Math.min(1, raw));
+    const v = Math.round(from + (to - from) * ease(t));
+    el.textContent = v;
+    if (t < 1) {
+      el.__rafCancel = requestAnimationFrame(tick);
+    } else {
+      el.textContent = to;
+      el.__rafCancel = null;
+    }
+  };
+  el.__rafCancel = requestAnimationFrame(tick);
+  // Belt-and-braces: guarantee the terminal value no matter what rAF does.
+  el.__fallback = setTimeout(() => {
+    if (el.__rafCancel) cancelAnimationFrame(el.__rafCancel);
+    el.__rafCancel = null;
+    el.textContent = to;
+  }, duration + 80);
+}
+
+// ---------- Drawer ----------
 
 function openDrawer(id) {
-  const r = state.results.find((x) => x.email.id === id);
+  // Try current results first; fall back to allResults so deep links work before simulation finishes.
+  const r = state.results.find((x) => x.email.id === id) || state.allResults.find((x) => x.email.id === id);
   if (!r) return;
   const drawer = $("#drawer");
   const backdrop = $("#drawerBackdrop");
@@ -303,12 +657,6 @@ function closeDrawer() {
   $("#drawer").setAttribute("aria-hidden", "true");
   $("#drawerBackdrop").hidden = true;
 }
-
-$("#drawerClose").addEventListener("click", closeDrawer);
-$("#drawerBackdrop").addEventListener("click", closeDrawer);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeDrawer();
-});
 
 function renderDrawer(r) {
   const e = r.email;
@@ -415,7 +763,6 @@ function internalTag(addr) {
 
 function highlightText(text, spans) {
   if (!spans || spans.length === 0) return escape(text);
-  // Sort by start, drop overlapping.
   const sorted = [...spans].sort((a, b) => a.start - b.start);
   const pruned = [];
   let lastEnd = -1;
@@ -460,7 +807,8 @@ function renderRedacted(text, spans) {
   return out;
 }
 
-// Filter buttons
+// ---------- Wire up controls ----------
+
 $("#filters").addEventListener("click", (e) => {
   const btn = e.target.closest(".chip");
   if (!btn) return;
@@ -469,7 +817,30 @@ $("#filters").addEventListener("click", (e) => {
   renderEmailList();
 });
 
-$("#rescanBtn").addEventListener("click", scanAll);
+$("#simPlay").addEventListener("click", () => {
+  if (state.sim.mode === "running") simPause();
+  else simPlay();
+});
+$("#simRestart").addEventListener("click", simRestart);
+$("#loadAllBtn").addEventListener("click", loadAllInstant);
+
+$("#speedSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-speed]");
+  if (!btn) return;
+  state.sim.speed = Number(btn.dataset.speed);
+  document.querySelectorAll("#speedSeg button").forEach((b) => b.classList.toggle("active", b === btn));
+});
+
+$("#drawerClose").addEventListener("click", closeDrawer);
+$("#drawerBackdrop").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeDrawer();
+  if (e.key === " " && !e.target.matches("input, textarea, button")) {
+    e.preventDefault();
+    if (state.sim.mode === "running") simPause();
+    else simPlay();
+  }
+});
 
 loadAll().catch((err) => {
   console.error(err);
