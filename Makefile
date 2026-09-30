@@ -2,7 +2,7 @@ PORT   ?= 8000
 OPF_SRC ?= .opf-src
 OPF_EXTRA = $(if $(wildcard .opf-enabled),--extra opf)
 
-.PHONY: help install run dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js
+.PHONY: help install run dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js audit audit-python audit-js check
 
 help:  ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,6 +45,18 @@ test-python: install
 test-js:
 	npm ci
 	npm test
+
+check: test audit  ## Run regression tests and dependency vulnerability audits
+
+audit: audit-python audit-js  ## Audit locked Python and JavaScript dependencies
+
+audit-python: install
+	@set -eu; requirements=$$(mktemp); trap 'rm -f "$$requirements"' EXIT; \
+	uv export --locked --all-extras --no-emit-project --no-emit-package opf --no-header --no-annotate > "$$requirements"; \
+	uv run --no-sync pip-audit --strict --disable-pip --require-hashes -r "$$requirements"
+
+audit-js:
+	npm audit
 
 clean:  ## Remove Python caches
 	find . -type d -name __pycache__ -exec rm -rf {} +

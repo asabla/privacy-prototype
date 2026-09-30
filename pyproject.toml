@@ -4,16 +4,16 @@ version = "0.1.0"
 description = "Email privacy scanner over OpenAI privacy-filter"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
-    "pydantic>=2.5",
+    "fastapi>=0.142.2,<0.143",
+    "uvicorn[standard]>=0.54.0,<0.55",
+    "pydantic>=2.13.5,<3",
 ]
 
 [project.optional-dependencies]
 opf = ["opf @ git+https://github.com/openai/privacy-filter@f7f00ca7fb869683eb732c010299d901457f19c3"]
 
 [dependency-groups]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=9.1.1,<10", "httpx2>=2.13.1,<3", "pip-audit>=2.10.1,<3"]
 
 [tool.uv]
 package = false
