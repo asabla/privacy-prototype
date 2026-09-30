@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from threading import BoundedSemaphore
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.corpus import EMPLOYEES, INTERNAL_DOMAINS, get_corpus
 from backend.detector import LABELS, get_detector
+from backend.security import MAX_TEXT_CHARS, ServiceBoundary, Settings, error_response
 
 
 @asynccontextmanager
@@ -21,13 +25,26 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Privacy Detector PoC", lifespan=lifespan)
+router = APIRouter()
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
 class ScanRequest(BaseModel):
-    text: str
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(max_length=MAX_TEXT_CHARS)
+    include_source: StrictBool = False
+
+
+@contextmanager
+def inference_slot(request: Request):
+    gate = request.app.state.inference_gate
+    if not gate.acquire(blocking=False):
+        raise HTTPException(429)
+    try:
+        yield
+    finally:
+        gate.release()
 
 
 def _domain_of(address: str) -> str:
@@ -81,7 +98,7 @@ def _known_employee_hits(text: str) -> list[dict[str, Any]]:
     return hits
 
 
-@app.get("/api/engine")
+@router.get("/api/engine")
 def engine_info() -> dict[str, Any]:
     d = get_detector()
     return {
@@ -91,28 +108,40 @@ def engine_info() -> dict[str, Any]:
     }
 
 
-@app.get("/api/config")
-def config() -> dict[str, Any]:
+@router.get("/api/config")
+def config(request: Request) -> dict[str, Any]:
     return {
         "internal_domains": INTERNAL_DOMAINS,
         "employees": EMPLOYEES,
         "labels": LABELS,
+        "input_enabled": request.app.state.settings.api_key is not None,
+        "max_text_chars": MAX_TEXT_CHARS,
     }
 
 
-@app.get("/api/corpus")
+@router.get("/api/corpus")
 def corpus() -> dict[str, Any]:
     return {"emails": [e.to_dict() for e in get_corpus()]}
 
 
-@app.post("/api/scan")
-def scan(req: ScanRequest) -> dict[str, Any]:
-    result = get_detector().detect(req.text)
-    return result.to_dict()
+@router.post("/api/scan")
+def scan(req: ScanRequest, request: Request) -> dict[str, Any]:
+    with inference_slot(request):
+        result = get_detector().detect(req.text).to_dict()
+    if not req.include_source:
+        result.pop("text")
+        for span in result["detected_spans"]:
+            span.pop("text")
+    return result
 
 
-@app.get("/api/scan-all")
-def scan_all() -> dict[str, Any]:
+@router.get("/api/scan-all")
+def scan_all(request: Request) -> dict[str, Any]:
+    with inference_slot(request):
+        return _scan_all()
+
+
+def _scan_all() -> dict[str, Any]:
     det = get_detector()
     results = []
     for e in get_corpus():
@@ -195,10 +224,35 @@ def scan_all() -> dict[str, Any]:
     }
 
 
-# Serve the static frontend.
-if FRONTEND_DIR.exists():
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings if settings is not None else Settings.from_env()
+    app = FastAPI(title="Sentinel privacy reference", lifespan=lifespan,
+                  docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.settings = settings
+    app.state.inference_gate = BoundedSemaphore(1)
+    app.add_middleware(ServiceBoundary, settings=settings)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, exc: RequestValidationError):
+        return error_response(422, "invalid_request")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException):
+        codes = {404: "not_found", 405: "method_not_allowed", 429: "processing_busy"}
+        return error_response(exc.status_code, codes.get(exc.status_code, "request_rejected"))
+
+    app.include_router(router)
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR), name="assets")
+
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
 
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(FRONTEND_DIR / "index.html")
+
+    return app
+
+
+app = create_app()

@@ -18,10 +18,15 @@ are synthetic. Detection runs locally; installing dependencies and the first OPF
 scan can download packages, tokenizer data, and model weights. The dashboard uses
 system fonts and does not request third-party web assets.
 
-The redacted view masks detected subject and body spans. Sender, recipient, employee,
-and other metadata remain visible, and the API returns original text and span values.
-It is an inspection tool, not an anonymized export. Keep the development server on
-localhost and use synthetic input: it has no authentication or request quotas.
+The synthetic inbox's redacted view masks detected subject and body spans. Its
+sender, recipient, employee, and other metadata remain visible; fixture endpoints
+return the original synthetic text for inspection. This is not an anonymized export.
+Submitted-text scanning is disabled until an operator configures an access key;
+its default response omits source text and matched values. See [the service boundary](docs/service-boundary.md)
+for authentication, limits, response contracts, and deployment requirements.
+
+The [reference-project plan](REFERENCE_PROJECT_PLAN.md) tracks the remaining work
+for support-ticket sharing, AI-prompt preparation, and email review/export.
 
 ### Decisions needed before a real-mail pilot
 
@@ -32,9 +37,9 @@ localhost and use synthetic input: it has no authentication or request quotas.
 - Extend the synthetic evaluation fixtures into representative labeled data for the
   intended languages, forwarded mail, and attachments. The small regression dataset
   does not establish accuracy for real email.
-- Define access control, raw-text retention, audit history, request limits, and deployment
-  ownership before accepting real email. Model inference is serialized within one
-  process; throughput and concurrent request behavior need a separate workload test.
+- Replace the single operator key with organizational identity and tenant isolation
+  before a shared deployment. Define retention and deployment ownership; concurrency
+  bounds are implemented, but workload capacity is not established by unit tests.
 
 ## Screenshots
 
@@ -75,7 +80,7 @@ Or without `make`:
 
 ```bash
 uv sync
-uv run uvicorn backend.main:app --reload --port 8000
+uv run uvicorn backend.main:app --host 127.0.0.1 --reload --port 8000 --no-access-log --limit-concurrency 16
 ```
 
 ## Switching to the real OPF engine

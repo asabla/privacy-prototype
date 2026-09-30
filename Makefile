@@ -16,7 +16,7 @@ lock:  ## Refresh uv.lock from pyproject.toml
 	uv lock
 
 run: install  ## Start the server on $PORT (default 8000)
-	uv run --no-sync uvicorn backend.main:app --reload --port $(PORT)
+	uv run --no-sync uvicorn backend.main:app --host 127.0.0.1 --reload --port $(PORT) --no-access-log --limit-concurrency 16
 
 dev: run  ## Alias for `run`
 
