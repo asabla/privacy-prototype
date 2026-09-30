@@ -22,7 +22,7 @@ from backend.corpus import INTERNAL_DOMAINS
 from backend.detector import LABELS, Detector, HEURISTIC_PATTERNS, Span, _apply_redaction, _merge_overlapping_spans
 from backend.security import MAX_BODY_BYTES, MAX_TEXT_CHARS
 
-POLICY_VERSION = "2026-09-30.1"
+POLICY_VERSION = "2026-09-30.2"
 RECEIPT_TTL_SECONDS = 600
 MAX_PENDING_REVIEWS = 256
 MAX_FINDINGS = 512
@@ -73,7 +73,7 @@ class RoutingSummary(Contract):
 
 class Candidate(Contract):
     use_case: UseCase
-    policy_version: Literal["2026-09-30.1"] = POLICY_VERSION
+    policy_version: Literal["2026-09-30.2"] = POLICY_VERSION
     engine: Literal["heuristic", "opf"]
     fields: dict[FieldName, CandidateValue] = Field(max_length=4)
     routing: RoutingSummary | None = None
@@ -132,8 +132,11 @@ def _routing(fields: dict[str, str]) -> RoutingSummary:
 # quoted assignments. These are policy safeguards, separate from model evaluation.
 _CREDENTIAL_SHAPE = next(pattern for label, pattern in HEURISTIC_PATTERNS if label == "secret")
 _CREDENTIAL_ASSIGNMENT = re.compile(
-    r"(?i)\b(?:api[_-]?key|access[_-]?token|token|password|passwd|secret)\s*[:=]\s*"
-    r"(?:\"[^\"\r\n]+\"|'[^'\r\n]+'|[^\s,;]+)"
+    r"(?i)(?<!\w)(?P<key_quote>[\"']?)(?:api[_-]?key|access[_-]?token|token|password|passwd|secret)"
+    r"(?P=key_quote)\s*[:=]\s*"
+    # Consume escaped quotes and unterminated quoted values through the line end.
+    r'''(?:"(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^"\\\r\n])*(?:"|(?=\r?\n|$))'''
+    r'''|'(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^'\\\r\n])*(?:'|(?=\r?\n|$))|[^\s,;"']+)'''
 )
 _PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)")
 

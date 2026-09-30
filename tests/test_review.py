@@ -2,6 +2,7 @@ import copy
 import json
 import secrets
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from backend.review import (
     ReviewError, ReviewStore, prepare,
 )
 from backend.security import Settings
+from evaluation.core import load_cases
 
 
 @pytest.fixture
@@ -43,7 +45,7 @@ def test_prepare_review_export_all_use_cases(client, use_case):
                   "subject": "Question from alice@example.com", "body": "Contact alice@example.com."}
     result = prepared(client, use_case, fields=fields)
     candidate = result["candidate"]
-    assert candidate["policy_version"] == "2026-09-30.1"
+    assert candidate["policy_version"] == "2026-09-30.2"
     assert candidate["engine"] == "heuristic"
     assert result["offset_unit"] == "unicode_code_points"
     assert "alice@example.com" not in json.dumps(result)
@@ -185,6 +187,37 @@ def test_invalid_model_spans_cannot_produce_exportable_result():
 
     with pytest.raises(ReviewError):
         prepare(PrepareRequest(use_case="ai_prompt", fields={"text": "sensitive_sentinel"}), BrokenModel())
+
+
+@pytest.mark.parametrize("case", load_cases(Path(__file__).parents[1] / "evaluation/credential-cases.json")[0], ids=lambda case: case.id)
+def test_annotated_credential_policy_coverage_without_model_help(case):
+    class MissedModel:
+        engine = "opf"
+
+        def detect(self, text):
+            return DetectionResult(engine=self.engine, text=text, redacted_text=text)
+
+    candidate, findings, _ = prepare(PrepareRequest(use_case="ai_prompt", fields={"text": case.text}), MissedModel())
+    expected = {index for _, start, end in case.expected for index in range(start, end)}
+    covered = {index for finding in findings for index in range(finding["start"], finding["end"])}
+    assert expected <= covered, f"Credential coverage gap in {case.id}"
+    if not expected:
+        assert not findings and candidate.fields["text"] == case.text
+    for _, start, end in case.expected:
+        assert case.text[start:end] not in candidate.fields["text"]
+
+
+@pytest.mark.parametrize("use_case", ["support_ticket", "ai_prompt", "email"])
+def test_json_credentials_stay_out_of_review_and_export(client, use_case):
+    text = '{"password": "synthetic sensitive words", "api_key": "demo"}'
+    fields = {"text": text}
+    if use_case == "email":
+        fields = {"sender": "alice@northwind.io", "recipients": "bob@example.com", "subject": "", "body": text}
+    result = prepared(client, use_case, fields=fields)
+    exported = client.post("/api/review/export", json=export_payload(result))
+    assert exported.status_code == 200
+    for value in ("synthetic sensitive words", "demo"):
+        assert value not in json.dumps(result) + exported.text
 
 
 def test_repeated_placeholders_are_consistent_within_request_and_reset_between_requests(client):

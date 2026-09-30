@@ -8,7 +8,7 @@ import { matchingMasks, mountWorkbench, reviewedText } from "../frontend/workben
 const html = await readFile(new URL("../frontend/workbench.html", import.meta.url), "utf8");
 const response = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
 function resultFor(body) {
-  return { candidate: { use_case: body.use_case, policy_version: "2026-09-30.1", engine: "heuristic",
+  return { candidate: { use_case: body.use_case, policy_version: "2026-09-30.2", engine: "heuristic",
     fields: Object.fromEntries(Object.entries(body.fields).map(([key, value]) => [key,
       ["sender", "recipients"].includes(key) ? `[${key.toUpperCase()}_REMOVED]` : value.replaceAll("alice@example.com", "[PRIVATE_EMAIL_1]")])), routing: null },
     findings: [], summary: { span_count: 1, manual_mask_count: body.manual_masks.length },

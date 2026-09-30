@@ -39,8 +39,8 @@ Submitted-text scanning is disabled until an operator configures an access key;
 its default response omits source text and matched values. See [the service boundary](docs/service-boundary.md)
 for authentication, limits, response contracts, and deployment requirements.
 
-The [reference-project plan](REFERENCE_PROJECT_PLAN.md) tracks the remaining work
-for support-ticket sharing, AI-prompt preparation, and email review/export.
+The [reference-project plan](REFERENCE_PROJECT_PLAN.md) records the acceptance
+requirements for support-ticket sharing, AI-prompt preparation, and email review/export.
 The authenticated [workbench](http://127.0.0.1:8000/workbench) implements these
 policies, manual masks, and one-use reviewed exports. The inbox remains a synthetic
 inspection view.
@@ -49,6 +49,8 @@ For a preloaded native service or a non-root, read-only container, follow the
 [runtime guide](docs/runtime.md). `/health` checks HTTP; `/ready` requires successful
 inference. The container uses the heuristic explicitly, while the native service
 can require real OPF without silent fallback.
+The [threat model](docs/threat-model.md) describes trust and retention boundaries;
+the [acceptance record](docs/acceptance.md) connects each requirement to its evidence.
 
 ### Decisions needed before a real-mail pilot
 

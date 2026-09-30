@@ -77,10 +77,14 @@ the service when finished, and manage Docker's own logs and storage under host p
 
 `make test-container` builds an independent project with a generated ephemeral key
 and port, verifies runtime restrictions and an external connection failure, exercises
-all three reviewed exports, rejects replay, checks overload recovery, and proves
+all three reviewed exports, rejects replay, records a burst of concurrent requests
+and subsequent recovery, and proves
 that a restart invalidates pending receipts. It also checks captured logs for its
 synthetic sentinels, and removes its containers and network in a `finally` block.
 CI runs this gate on Linux; local validation also exercises Docker on macOS/arm64.
+The exact busy count depends on scheduling; a fast heuristic run can accept every
+request. A separate deterministic test holds the inference slot and proves that
+competing requests get `429`, then succeed after release.
 
 ## Preload and verify real OPF without network access
 

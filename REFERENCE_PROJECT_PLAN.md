@@ -95,6 +95,14 @@ statements for implementation.
   Docker execution/restart, and real OPF preload plus 25 inbox examples and three
   workflows with Python network calls denied. Native `make serve` also passed all
   three DOM-to-HTTP workflows. The container runtime gate is now included in CI;
-  remote CI and merge are pending for this package.
-- R1–R11 as a whole still require W5's final acceptance audit. JSON-shaped credential
-  assignments were identified as a remaining masking gap for that package.
+  all four CI jobs passed and it merged as PR #7. Main was updated with rebase.
+- W5 implemented: policy `2026-09-30.2` closes JSON/YAML quoted-key and escaped or
+  unfinished quoted-value gaps; ten annotated policy cases and three export cases
+  were added. Local gates pass 114 Python, 18 frontend and three HTTP workflow
+  tests, both package audits, actual container runtime, and real offline OPF
+  preload/corpus/workflows. Browser downloads verify the fix and screenshots show
+  the current policy. The threat model and requirement-by-requirement evidence are
+  in `docs/threat-model.md` and `docs/acceptance.md`.
+- The final delivery gate is four green CI jobs for this package, its reviewed
+  merge, and verification from a clean main checkout. R1–R11 are mapped to evidence
+  in the acceptance record; residual detector and deployment limits remain explicit.
