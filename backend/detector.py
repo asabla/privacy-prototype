@@ -8,8 +8,11 @@ active so the distinction is visible.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
+from importlib import import_module
+from threading import Lock
 from typing import Any
 
 
@@ -61,6 +64,7 @@ class DetectionResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
+            "offset_unit": "unicode_code_points",
             "engine": self.engine,
             "summary": {
                 "span_count": len(self.detected_spans),
@@ -77,20 +81,27 @@ class Detector:
 
     def __init__(self) -> None:
         self._opf = None
+        self._inference_lock = Lock()
         self.engine = "heuristic"
         self.engine_detail = "Regex heuristic (demo mode)"
         try:
-            from opf._api import OPF  # type: ignore[import-not-found]
+            import_module("opf")
+        except ModuleNotFoundError as exc:
+            if exc.name != "opf":
+                raise
+            return
 
-            self._opf = OPF()
-            self.engine = "opf"
-            self.engine_detail = "OpenAI Privacy Filter (opf)"
-        except Exception as exc:  # ModuleNotFound or model-load failures
-            self._load_error = str(exc)
+        from opf._api import OPF  # type: ignore[import-not-found]
+
+        self._opf = OPF(device=os.environ.get("OPF_DEVICE", "cpu"))
+        self.engine = "opf"
+        self.engine_detail = "OpenAI Privacy Filter (opf)"
 
     def detect(self, text: str) -> DetectionResult:
         if self._opf is not None:
-            return self._detect_opf(text)
+            # OPF lazily initializes its runtime and decoder on the first scan.
+            with self._inference_lock:
+                return self._detect_opf(text)
         return self._detect_heuristic(text)
 
     def _detect_opf(self, text: str) -> DetectionResult:
@@ -105,35 +116,30 @@ class Detector:
             )
             for s in raw.get("detected_spans", [])
         ]
+        spans = _merge_overlapping_spans(text, spans)
         return DetectionResult(
             engine="opf",
             text=text,
             detected_spans=spans,
-            redacted_text=raw.get("redacted_text", text),
+            redacted_text=_apply_redaction(text, spans),
         )
 
     def _detect_heuristic(self, text: str) -> DetectionResult:
         spans: list[Span] = []
         for label, pattern in HEURISTIC_PATTERNS:
             for match in pattern.finditer(text):
-                matched = match.group(0)
+                group = 1 if pattern is _NAME_HINT else 0
+                matched = match.group(group)
                 spans.append(
                     Span(
                         label=label,
-                        start=match.start(),
-                        end=match.end(),
+                        start=match.start(group),
+                        end=match.end(group),
                         text=matched,
                         placeholder=f"[{label.upper()}]",
                     )
                 )
-        # Dedupe overlapping spans, keeping the longest (more specific) match.
-        spans.sort(key=lambda s: (s.start, -(s.end - s.start)))
-        pruned: list[Span] = []
-        last_end = -1
-        for s in spans:
-            if s.start >= last_end:
-                pruned.append(s)
-                last_end = s.end
+        pruned = _merge_overlapping_spans(text, spans)
 
         redacted = _apply_redaction(text, pruned)
         return DetectionResult(
@@ -142,6 +148,36 @@ class Detector:
             detected_spans=pruned,
             redacted_text=redacted,
         )
+
+
+def _merge_overlapping_spans(text: str, spans: list[Span]) -> list[Span]:
+    """Preserve the union of every match, prioritizing secrets within overlaps."""
+    merged: list[Span] = []
+    cluster: list[Span] = []
+    start = end = 0
+
+    def flush() -> None:
+        representative = min(
+            cluster,
+            key=lambda s: (s.label != "secret", -(s.end - s.start), s.start, s.label),
+        )
+        merged.append(Span(representative.label, start, end, text[start:end], representative.placeholder))
+
+    for span in sorted(spans, key=lambda s: (s.start, s.end)):
+        if not 0 <= span.start < span.end <= len(text):
+            raise ValueError("Detector returned an invalid span range")
+        if cluster and span.start >= end:
+            flush()
+            cluster = []
+        if not cluster:
+            start = span.start
+            end = span.end
+        else:
+            end = max(end, span.end)
+        cluster.append(span)
+    if cluster:
+        flush()
+    return merged
 
 
 def _apply_redaction(text: str, spans: list[Span]) -> str:
@@ -160,10 +196,10 @@ def _apply_redaction(text: str, spans: list[Span]) -> str:
 _NAME_HINT = re.compile(
     r"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.|"
     r"I am|My name is|Regards,|Sincerely,|Best,|Cheers,|Thanks,|Thank you,|From:|To:|Dear)\s*"
-    r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})"
+    r"([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){0,2})"
 )
 
-_NAME_LOOSE = re.compile(r"\b[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}\b")
+_NAME_LOOSE = re.compile(r"\b[A-Z][a-z]{2,}[ \t]+[A-Z][a-z]{2,}\b")
 
 HEURISTIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Secrets first — catch credentials and API-key shapes before generic rules.
@@ -231,10 +267,12 @@ HEURISTIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 
 _detector: Detector | None = None
+_detector_lock = Lock()
 
 
 def get_detector() -> Detector:
     global _detector
-    if _detector is None:
-        _detector = Detector()
-    return _detector
+    with _detector_lock:
+        if _detector is None:
+            _detector = Detector()
+        return _detector

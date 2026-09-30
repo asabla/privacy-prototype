@@ -4,12 +4,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sentinel — Email Privacy Scanner</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
@@ -35,10 +29,10 @@
         </div>
         <div class="live-indicator" id="liveIndicator" hidden>
           <span class="live-dot"></span>
-          <span class="live-text"><span id="liveCount">0</span>/<span id="liveTotal">0</span> · live</span>
+          <span class="live-text"><span id="liveCount">0</span>/<span id="liveTotal">0</span> · replay</span>
         </div>
         <div class="sim-controls" id="simControls">
-          <button class="btn btn-primary btn-icon" id="simPlay" title="Start / pause simulation">
+          <button class="btn btn-primary btn-icon" id="simPlay" title="Start / pause simulation" disabled>
             <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" hidden><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
             <span id="simPlayLabel">Start</span>
@@ -52,12 +46,12 @@
             <button data-speed="2">2×</button>
             <button data-speed="4">4×</button>
           </div>
-          <button class="btn btn-icon notify-toggle" id="notifyToggle" title="Alerts are off — click to enable leak notifications" aria-pressed="false">
+          <button class="btn btn-icon notify-toggle" id="notifyToggle" title="Alerts are off — click to enable risk notifications" aria-pressed="false">
             <svg class="icon-bell-off" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13a17.89 17.89 0 0 1-1.63-7A5 5 0 0 0 12 2a5 5 0 0 0-1.26.16"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 2.2-.45 4.3-1.3 6.2A2 2 0 0 0 6.46 17H17"/><path d="M2 2l20 20"/></svg>
             <svg class="icon-bell-on" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
             <span>Alerts</span>
           </button>
-          <button class="btn" id="loadAllBtn" title="Skip simulation and load everything">Load all</button>
+          <button class="btn" id="loadAllBtn" title="Skip simulation and load everything" disabled>Load all</button>
         </div>
       </div>
     </header>
@@ -66,13 +60,18 @@
       <section class="hero">
         <div class="hero-copy">
           <div class="eyebrow">Privacy operations · PoC</div>
-          <h1>Catch sensitive data before it leaves the building.</h1>
+          <h1>Explore privacy risks in a synthetic inbox.</h1>
           <p>
-            Synthetic inbox for <strong>Northwind Corp</strong>, streamed through OpenAI's
-            <a href="https://github.com/openai/privacy-filter" target="_blank" rel="noopener">privacy-filter</a>.
-            Every message is classified by direction, domain ownership, and PII content.
+            Replay sample messages for <strong>Northwind Corp</strong> using the active detection engine.
+            Inspect potential sensitive content and traffic crossing the example company's domains.
+            This local demo does not connect to a mailbox, send messages, or block delivery.
           </p>
         </div>
+      </section>
+
+      <section class="panel" id="loadStatus" role="status" aria-live="polite">
+        <p id="loadMessage">Loading the synthetic inbox…</p>
+        <button class="btn" id="retryLoad" hidden>Retry</button>
       </section>
 
       <section class="kpis" id="kpis">
@@ -91,7 +90,7 @@
         <aside class="panel">
           <div class="panel-header">
             <h2>Traffic split</h2>
-            <div class="panel-sub">How mail moves — and where it leaks</div>
+            <div class="panel-sub">Example traffic and potential exposure</div>
           </div>
           <div class="split-chart" id="splitChart"></div>
         </aside>
@@ -129,7 +128,7 @@
 
     <!-- Slide-in detail drawer -->
     <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
-    <aside class="drawer" id="drawer" aria-hidden="true">
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Email details" aria-hidden="true" inert>
       <header class="drawer-header">
         <div class="drawer-badges" id="drawerBadges"></div>
         <button class="btn-ghost" id="drawerClose" aria-label="Close">

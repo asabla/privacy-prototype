@@ -1,15 +1,6 @@
 // Sentinel — privacy detector PoC
 
-const LABEL_META = {
-  private_person:  { short: "Person",   hex: "#a78bfa" },
-  private_email:   { short: "Email",    hex: "#22d3ee" },
-  private_phone:   { short: "Phone",    hex: "#38bdf8" },
-  private_address: { short: "Address",  hex: "#f472b6" },
-  private_url:     { short: "URL",      hex: "#fb7185" },
-  private_date:    { short: "Date",     hex: "#f59e0b" },
-  account_number:  { short: "Account",  hex: "#fbbf24" },
-  secret:          { short: "Secret",   hex: "#ef4444" },
-};
+import { LABEL_META, escape, highlightText, renderRedacted } from "./rendering.js";
 
 const LABEL_ORDER = [
   "secret",
@@ -23,6 +14,7 @@ const LABEL_ORDER = [
 ];
 
 const state = {
+  ready: false,
   engine: null,
   engineDetail: null,
   internalDomains: [],
@@ -37,6 +29,7 @@ const state = {
     queue: [],             // remaining results to reveal
     speed: 1,
     timer: null,
+    autoplayTimer: null,
   },
   // Cached live aggregate (updated incrementally each time a result is added).
   aggregates: null,
@@ -44,15 +37,38 @@ const state = {
   notify: false,
   // Flipped while the detail drawer is open, so we never pile toasts over it.
   drawerOpen: false,
+  drawerTrigger: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
 
+async function fetchJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Request failed (${response.status}). Check the server and try again.`);
+  return response.json();
+}
+
+async function initialize() {
+  state.ready = false;
+  $("#retryLoad").hidden = true;
+  $("#loadStatus").hidden = false;
+  $("#loadMessage").textContent = "Scanning the synthetic inbox. The first model scan may download weights.";
+  document.querySelectorAll("#simControls button").forEach((button) => { button.disabled = true; });
+  try {
+    await loadAll();
+    $("#loadStatus").hidden = true;
+  } catch (err) {
+    $("#engineLabel").textContent = "Scan unavailable";
+    $("#loadMessage").textContent = `Unable to load the demo. ${err.message || err}`;
+    $("#retryLoad").hidden = false;
+  }
+}
+
 async function loadAll() {
   const [engine, config, scan] = await Promise.all([
-    fetch("/api/engine").then((r) => r.json()),
-    fetch("/api/config").then((r) => r.json()),
-    fetch("/api/scan-all").then((r) => r.json()),
+    fetchJson("/api/engine"),
+    fetchJson("/api/config"),
+    fetchJson("/api/scan-all"),
   ]);
   state.engine = engine.engine;
   state.engineDetail = engine.detail;
@@ -64,6 +80,9 @@ async function loadAll() {
   renderFooter();
   renderScaffold();
   resetDisplay();
+  state.ready = true;
+  document.querySelectorAll("#simControls button").forEach((button) => { button.disabled = false; });
+  updateSimButtons();
 
   // If the user deep-linked to a specific email, skip simulation and load everything.
   const params = new URLSearchParams(location.search);
@@ -78,7 +97,7 @@ async function loadAll() {
     }
   } else {
     // Autoplay the simulation shortly after page load so the user sees it breathe.
-    setTimeout(() => simPlay(), 600);
+    state.sim.autoplayTimer = setTimeout(() => simPlay(), 600);
   }
 }
 
@@ -89,7 +108,7 @@ function renderEngineBadge() {
   const label = $("#engineLabel");
   if (state.engine === "opf") {
     badge.classList.remove("heuristic");
-    label.textContent = "OpenAI privacy-filter · live";
+    label.textContent = "OpenAI privacy-filter · local";
   } else {
     badge.classList.add("heuristic");
     label.textContent = "Heuristic demo engine";
@@ -119,7 +138,7 @@ function renderScaffold() {
   const kpiDefs = [
     { key: "total",         label: "Total emails",         sub: "", cls: "" },
     { key: "sensitive",     label: "Sensitive",            sub: "", cls: "kpi-warn" },
-    { key: "leaks_out",     label: "Outbound leaks",       sub: "sensitive → external recipient", cls: "kpi-danger" },
+    { key: "leaks_out",     label: "Outbound risk",        sub: "sensitive → external recipient", cls: "kpi-danger" },
     { key: "sensitive_inbound", label: "Inbound PII",      sub: "external → internal with PII", cls: "kpi-accent" },
     { key: "crossing_boundary", label: "Boundary crossings", sub: "internal ↔ external", cls: "" },
     { key: "spans",         label: "PII spans",            sub: "across categories", cls: "kpi-ok" },
@@ -146,8 +165,8 @@ function renderScaffold() {
 
   // Split chart
   $("#splitChart").innerHTML = [
-    { id: "sens-clean", title: "Sensitive vs clean", left: "sensitive", right: "clean", leftClass: "sens", rightClass: "safe" },
-    { id: "leak-safe",  title: "Outbound leaks vs safe outbound", left: "leaks", right: "safe", leftClass: "leak", rightClass: "safe" },
+    { id: "sens-clean", title: "Detection findings", left: "sensitive", right: "no findings", leftClass: "sens", rightClass: "safe" },
+    { id: "leak-safe",  title: "Outbound review signals", left: "flagged", right: "not flagged", leftClass: "leak", rightClass: "safe" },
     { id: "int-ext",    title: "Traffic by recipient", left: "internal-only", right: "external", leftClass: "internal-seg", rightClass: "external-seg" },
   ].map((r) => `
     <div class="split-row" data-id="${r.id}">
@@ -268,7 +287,7 @@ function renderStreamSub() {
   const total = state.allResults.length;
   const shown = state.results.length;
   const sub = $("#streamSub");
-  if (state.sim.mode === "running") sub.textContent = `Receiving live · ${shown}/${total}`;
+  if (state.sim.mode === "running") sub.textContent = `Replaying synthetic messages · ${shown}/${total}`;
   else if (state.sim.mode === "paused") sub.textContent = `Paused · ${shown}/${total}`;
   else if (state.sim.mode === "done") sub.textContent = `Simulation complete · ${shown} messages processed`;
   else sub.textContent = `${shown}/${total} messages`;
@@ -340,7 +359,14 @@ function attachRowHandlers(root) {
     ? [root]
     : root.querySelectorAll(".email-row");
   rows.forEach((el) => {
-    el.addEventListener("click", () => openDrawer(el.dataset.id));
+    el.addEventListener("click", () => openDrawer(el.dataset.id, el));
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openDrawer(el.dataset.id, el);
+      }
+    });
   });
 }
 
@@ -354,15 +380,15 @@ function emailRowHtml(r, live) {
     ? `to ${e.recipients.map(short).join(", ")}`
     : `from ${short(e.sender)}`;
   const isLeak = dir === "outbound" && r.scan.is_sensitive && !r.classification.all_recipients_internal;
-  const risk = isLeak ? { label: "Leak", cls: "leak" }
+  const risk = isLeak ? { label: "Risk", cls: "leak" }
                       : r.scan.is_sensitive ? { label: "Sensitive", cls: "sensitive" }
-                      : { label: "Clean", cls: "clean" };
+                      : { label: "No findings", cls: "clean" };
   const dots = piiDots(r.scan.by_label);
   const liveCls = live ? " is-new" : "";
   const leakCls = isLeak ? " row-leak" : "";
   const scanline = live ? `<div class="scanline"></div>` : "";
   return `
-    <div class="email-row${liveCls}${leakCls}" data-id="${e.id}">
+    <div class="email-row${liveCls}${leakCls}" data-id="${escape(e.id)}" role="button" tabindex="0" aria-haspopup="dialog">
       ${scanline}
       <div class="dir-icon ${dir}" title="${dir}">${dirIcon}</div>
       <div class="email-addr">
@@ -413,19 +439,15 @@ function domainOf(address) {
   return at >= 0 ? address.slice(at + 1) : "";
 }
 
-function escape(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 // ---------- Simulation engine ----------
 
 function resetDisplay() {
   state.results = [];
   state.aggregates = emptyAggregates();
+  document.querySelectorAll(".kpi .value").forEach((el) => {
+    cancelNumberAnimation(el);
+    el.textContent = "0";
+  });
   renderKpis(emptyAggregates(), state.aggregates);
   renderLabelBars(state.aggregates);
   renderSplitChart(state.aggregates);
@@ -444,6 +466,9 @@ function shuffled(arr) {
 }
 
 function simPlay() {
+  if (!state.ready) return;
+  clearTimeout(state.sim.autoplayTimer);
+  state.sim.autoplayTimer = null;
   if (state.sim.mode === "running") return;
   if (state.sim.mode === "idle" || state.sim.mode === "done") {
     // Fresh start.
@@ -467,6 +492,7 @@ function simPause() {
 }
 
 function simRestart() {
+  if (!state.ready) return;
   if (state.sim.timer) { clearTimeout(state.sim.timer); state.sim.timer = null; }
   state.sim.mode = "idle";
   resetDisplay();
@@ -514,6 +540,9 @@ function revealResult(r) {
 }
 
 function loadAllInstant() {
+  if (!state.ready) return;
+  clearTimeout(state.sim.autoplayTimer);
+  state.sim.autoplayTimer = null;
   if (state.sim.timer) { clearTimeout(state.sim.timer); state.sim.timer = null; }
   state.sim.mode = "done";
   state.sim.queue = [];
@@ -573,7 +602,7 @@ function leakToast(r) {
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
     </div>
     <div class="toast-body">
-      <div class="toast-title">Outbound leak detected · ${labelName}</div>
+      <div class="toast-title">Outbound risk flagged · ${labelName}</div>
       <div class="toast-sub">${escape(e.subject)}</div>
       <div class="toast-meta mono">${escape(e.sender)} → ${escape(e.recipients.map(short).join(", "))}</div>
     </div>
@@ -603,7 +632,7 @@ function toastDone() {
     </div>
     <div class="toast-body">
       <div class="toast-title">Simulation complete</div>
-      <div class="toast-sub">${state.aggregates.total} processed · ${state.aggregates.leaks_out} outbound leak${state.aggregates.leaks_out === 1 ? "" : "s"}</div>
+      <div class="toast-sub">${state.aggregates.total} processed · ${state.aggregates.leaks_out} outbound messages flagged</div>
     </div>
   `;
   host.appendChild(toast);
@@ -618,9 +647,15 @@ function dismissToast(el) {
 
 // ---------- Number tick animation ----------
 
-function animateNumber(el, from, to, duration) {
+function cancelNumberAnimation(el) {
   if (el.__rafCancel) cancelAnimationFrame(el.__rafCancel);
   if (el.__fallback) clearTimeout(el.__fallback);
+  el.__rafCancel = null;
+  el.__fallback = null;
+}
+
+function animateNumber(el, from, to, duration) {
+  cancelNumberAnimation(el);
   if (!Number.isFinite(from)) from = to;
   el.textContent = from;
   const t0 = performance.now();
@@ -648,10 +683,11 @@ function animateNumber(el, from, to, duration) {
 
 // ---------- Drawer ----------
 
-function openDrawer(id) {
+function openDrawer(id, trigger = document.activeElement) {
   // Try current results first; fall back to allResults so deep links work before simulation finishes.
   const r = state.results.find((x) => x.email.id === id) || state.allResults.find((x) => x.email.id === id);
   if (!r) return;
+  if (!state.drawerOpen) state.drawerTrigger = trigger;
   state.drawerOpen = true;
   document.body.classList.add("drawer-open");
   // Dismiss any toasts already in flight so nothing lingers over the inspection view.
@@ -659,15 +695,26 @@ function openDrawer(id) {
   const drawer = $("#drawer");
   const backdrop = $("#drawerBackdrop");
   drawer.setAttribute("aria-hidden", "false");
+  drawer.inert = false;
+  document.querySelector("main").inert = true;
+  document.querySelector(".topbar").inert = true;
   backdrop.hidden = false;
   renderDrawer(r);
+  $("#drawerClose").focus({ preventScroll: true });
 }
 
 function closeDrawer() {
+  if (!state.drawerOpen) return;
   state.drawerOpen = false;
   document.body.classList.remove("drawer-open");
+  document.querySelector("main").inert = false;
+  document.querySelector(".topbar").inert = false;
+  const trigger = state.drawerTrigger;
+  (trigger?.isConnected && trigger !== document.body ? trigger : $("#loadAllBtn")).focus({ preventScroll: true });
+  $("#drawer").inert = true;
   $("#drawer").setAttribute("aria-hidden", "true");
   $("#drawerBackdrop").hidden = true;
+  state.drawerTrigger = null;
 }
 
 function renderDrawer(r) {
@@ -682,7 +729,7 @@ function renderDrawer(r) {
   else badges.push(`<span class="badge external">crosses boundary</span>`);
   if (isLeak) badges.push(`<span class="badge leak">outbound leak risk</span>`);
   else if (r.scan.is_sensitive) badges.push(`<span class="badge sensitive">sensitive</span>`);
-  else badges.push(`<span class="badge safe">clean</span>`);
+  else badges.push(`<span class="badge safe">no findings</span>`);
 
   $("#drawerBadges").innerHTML = badges.join("");
 
@@ -714,17 +761,18 @@ function renderDrawer(r) {
     </dl>
 
     <div class="drawer-section-title">Subject</div>
-    <div class="body-box">${subjectHtml}</div>
+    <div class="body-box" id="subjectBox">${subjectHtml}</div>
 
     <div class="toggle-row" style="justify-content:space-between;margin-top:18px">
       <div class="drawer-section-title" style="margin:0">Body</div>
       <div class="segmented" id="viewToggle" data-view="highlighted">
-        <button data-mode="highlighted" class="active">Highlighted</button>
-        <button data-mode="redacted">Redacted</button>
+        <button data-mode="highlighted" class="active" aria-pressed="true">Highlighted</button>
+        <button data-mode="redacted" aria-pressed="false">Redacted</button>
       </div>
     </div>
 
     <div class="body-box" id="bodyBox">${bodyHtml}</div>
+    <p class="panel-sub">Redaction covers detected subject and body spans. Sender and recipient metadata remain visible. A scan can miss sensitive content.</p>
 
     <div class="drawer-section-title">Detected spans (${r.scan.span_count})</div>
     <div class="label-bars">
@@ -736,13 +784,15 @@ function renderDrawer(r) {
   toggle.querySelectorAll("button").forEach((b) => {
     b.addEventListener("click", () => {
       toggle.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+      toggle.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       b.classList.add("active");
       const mode = b.dataset.mode;
-      const box = $("#bodyBox");
-      if (mode === "redacted") {
-        box.innerHTML = renderRedacted(e.body, r.scan.body.detected_spans);
-      } else {
-        box.innerHTML = highlightText(e.body, r.scan.body.detected_spans);
+      toggle.dataset.view = mode;
+      for (const part of ["subject", "body"]) {
+        const box = $(`#${part}Box`);
+        box.innerHTML = mode === "redacted"
+          ? renderRedacted(r.scan[part].redacted_text)
+          : highlightText(e[part], r.scan[part].detected_spans);
       }
     });
   });
@@ -771,52 +821,6 @@ function internalTag(addr) {
     return ` <span class="badge internal" style="font-size:9.5px;padding:1px 6px;margin-left:4px">internal</span>`;
   }
   return ` <span class="badge external" style="font-size:9.5px;padding:1px 6px;margin-left:4px">external</span>`;
-}
-
-function highlightText(text, spans) {
-  if (!spans || spans.length === 0) return escape(text);
-  const sorted = [...spans].sort((a, b) => a.start - b.start);
-  const pruned = [];
-  let lastEnd = -1;
-  for (const s of sorted) {
-    if (s.start >= lastEnd) {
-      pruned.push(s);
-      lastEnd = s.end;
-    }
-  }
-  let out = "";
-  let cursor = 0;
-  for (const s of pruned) {
-    out += escape(text.slice(cursor, s.start));
-    const m = LABEL_META[s.label];
-    out += `<span class="span-hl" data-label="${s.label}" style="color:${m?.hex || '#fff'}">${escape(text.slice(s.start, s.end))}<span class="hl-tag">${m?.short || s.label}</span></span>`;
-    cursor = s.end;
-  }
-  out += escape(text.slice(cursor));
-  return out;
-}
-
-function renderRedacted(text, spans) {
-  if (!spans || spans.length === 0) return escape(text);
-  const sorted = [...spans].sort((a, b) => a.start - b.start);
-  const pruned = [];
-  let lastEnd = -1;
-  for (const s of sorted) {
-    if (s.start >= lastEnd) {
-      pruned.push(s);
-      lastEnd = s.end;
-    }
-  }
-  let out = "";
-  let cursor = 0;
-  for (const s of pruned) {
-    out += escape(text.slice(cursor, s.start));
-    const m = LABEL_META[s.label];
-    out += `<span class="redacted-tok" style="color:${m?.hex || '#fff'}">${escape(s.placeholder || "[REDACTED]")}</span>`;
-    cursor = s.end;
-  }
-  out += escape(text.slice(cursor));
-  return out;
 }
 
 // ---------- Wire up controls ----------
@@ -857,8 +861,8 @@ function updateNotifyToggle() {
   btn.classList.toggle("on", on);
   btn.setAttribute("aria-pressed", String(on));
   btn.title = on
-    ? "Alerts on — click to silence leak notifications"
-    : "Alerts off — click to enable leak notifications";
+    ? "Alerts on — click to silence risk notifications"
+    : "Alerts off — click to enable risk notifications";
   btn.querySelector(".icon-bell-off").hidden = on;
   btn.querySelector(".icon-bell-on").hidden = !on;
 }
@@ -866,7 +870,24 @@ function updateNotifyToggle() {
 $("#drawerClose").addEventListener("click", closeDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeDrawer();
+  if (state.drawerOpen) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeDrawer();
+    } else if (e.key === "Tab") {
+      const buttons = $("#drawer").querySelectorAll("button:not([disabled])");
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    return;
+  }
   if (e.key === " " && !e.target.matches("input, textarea, button")) {
     e.preventDefault();
     if (state.sim.mode === "running") simPause();
@@ -874,7 +895,5 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-loadAll().catch((err) => {
-  console.error(err);
-  $("#kpis").innerHTML = `<div class="panel" style="grid-column:1/-1;color:#fca5a5">Failed to load: ${escape(err.message || err)}</div>`;
-});
+$("#retryLoad").addEventListener("click", initialize);
+initialize();

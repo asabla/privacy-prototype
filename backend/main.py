@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,13 @@ from backend.corpus import EMPLOYEES, INTERNAL_DOMAINS, get_corpus
 from backend.detector import LABELS, get_detector
 
 
-app = FastAPI(title="Privacy Detector PoC")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    get_detector()
+    yield
+
+
+app = FastAPI(title="Privacy Detector PoC", lifespan=lifespan)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
@@ -49,7 +56,7 @@ def _classify_email(sender: str, recipients: list[str]) -> dict[str, Any]:
         "all_recipients_internal": all_rcpt_internal,
         "any_recipient_internal": any_rcpt_internal,
         "fully_internal": sender_internal and all_rcpt_internal,
-        "crosses_boundary": sender_internal != all_rcpt_internal,
+        "crosses_boundary": any(sender_internal != internal for internal in rcpt_internal),
         "external_domains": external_domains,
     }
 

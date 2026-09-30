@@ -360,6 +360,10 @@ a:hover { border-bottom-color: var(--cyan); }
   transition: background 0.12s ease;
 }
 .email-row:hover { background: var(--bg-panel-hover); }
+.email-row:focus-visible, button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
 
 .dir-icon {
   width: 24px; height: 24px;
@@ -933,7 +937,7 @@ body.drawer-open .toast-stack { display: none; }
 
 /* Empty inbox state */
 .email-list:empty::before {
-  content: "Press ▶ to start the simulation — emails will stream in live.";
+  content: "No messages shown. Wait for the scan, start replay, or select another filter.";
   display: block;
   padding: 48px 16px;
   text-align: center;
