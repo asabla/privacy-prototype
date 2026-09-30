@@ -1,6 +1,7 @@
 """Opt-in real OPF API check; fails immediately if the heuristic is selected."""
 
 import json
+from pathlib import Path
 import secrets
 
 from fastapi.testclient import TestClient
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 from backend.detector import DetectionResult, Span
 from backend.main import create_app
 from backend.security import Settings
-from evaluation.core import Case, score_case
+from evaluation.core import Case, load_cases, score_case
 
 
 def validate_scan(scan: dict) -> None:
@@ -85,7 +86,24 @@ def main(*, preload: bool = False) -> None:
                 raise ValueError("Export did not preserve the reviewed candidate")
             if client.post("/api/review/export", json=payload).status_code != 410:
                 raise ValueError("An export receipt was reusable")
+        policy_cases, _ = load_cases(Path(__file__).with_name("support-log-cases.json"))
+        for case in policy_cases:
+            if not case.expected:
+                continue  # Model-only false positives remain separate from policy regressions.
+            response = client.post("/api/prepare", json={"use_case": "support_ticket", "fields": {"text": case.text}})
+            response.raise_for_status()
+            prepared = response.json()
+            expected = {index for _, start, end in case.expected for index in range(start, end)}
+            covered = {index for finding in prepared["findings"] for index in range(finding["start"], finding["end"])}
+            if not expected <= covered or prepared["candidate"]["engine"] != "opf":
+                raise ValueError(f"Real-model policy coverage failed for {case.id}")
+            exported = client.post("/api/review/export", json={"receipt": prepared["review"]["receipt"],
+                                  "candidate": prepared["candidate"], "confirmed": True})
+            exported.raise_for_status()
+            if exported.json()["candidate"] != prepared["candidate"]:
+                raise ValueError("Real-model policy export mismatch")
         print(json.dumps({"engine": "opf", "unicode_sample": "passed", "empty_input": "passed",
+                          "support_log_exports": sum(bool(case.expected) for case in policy_cases),
                           "corpus_emails": len(actual_ids), "review_workflows": len(workflows), "status": "passed"}))
 
 

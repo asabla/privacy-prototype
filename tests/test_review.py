@@ -45,7 +45,7 @@ def test_prepare_review_export_all_use_cases(client, use_case):
                   "subject": "Question from alice@example.com", "body": "Contact alice@example.com."}
     result = prepared(client, use_case, fields=fields)
     candidate = result["candidate"]
-    assert candidate["policy_version"] == "2026-09-30.3"
+    assert candidate["policy_version"] == "2026-09-30.4"
     assert candidate["engine"] == "heuristic"
     assert result["offset_unit"] == "unicode_code_points"
     assert "alice@example.com" not in json.dumps(result)
@@ -189,7 +189,8 @@ def test_invalid_model_spans_cannot_produce_exportable_result():
         prepare(PrepareRequest(use_case="ai_prompt", fields={"text": "sensitive_sentinel"}), BrokenModel())
 
 
-@pytest.mark.parametrize("case", load_cases(Path(__file__).parents[1] / "evaluation/credential-cases.json")[0], ids=lambda case: case.id)
+@pytest.mark.parametrize("case", [case for name in ("credential-cases.json", "support-log-cases.json")
+    for case in load_cases(Path(__file__).parents[1] / "evaluation" / name)[0]], ids=lambda case: case.id)
 def test_annotated_credential_policy_coverage_without_model_help(case):
     class MissedModel:
         engine = "opf"
@@ -205,7 +206,8 @@ def test_annotated_credential_policy_coverage_without_model_help(case):
         assert not findings and candidate.fields["text"] == case.text
     for _, start, end in case.expected:
         assert case.text[start:end] not in candidate.fields["text"]
-    for context in ("public_note: keep this", "public note", "Continue investigating the login error."):
+    for context in ("public_note: keep this", "public note", "Continue investigating the login error.",
+                    "Public context: investigate error 404.", "Content-Type: text/plain", "Accept: application/json"):
         if context in case.text:
             assert context in candidate.fields["text"]
 
@@ -216,6 +218,11 @@ def test_annotated_credential_policy_coverage_without_model_help(case):
     ('password="example first line\nexample second line"', ("example first line", "example second line")),
     ('password: |\n  example first line\n  example second line\npublic_note: investigate',
      ("example first line", "example second line")),
+    ('Authorization: Bearer example words\nPublic context: investigate error 404.', ("example words",)),
+    ('Cookie: session=example words; preference=light\nPublic context: investigate error 404.',
+     ("example words", "preference=light")),
+    ('> password: |\n>   example first\n>   example second\n> Public context: investigate error 404.',
+     ("example first", "example second")),
 ])
 def test_credentials_stay_out_of_review_and_export(client, use_case, text, values):
     fields = {"text": text}
@@ -226,6 +233,8 @@ def test_credentials_stay_out_of_review_and_export(client, use_case, text, value
     assert exported.status_code == 200
     for value in values:
         assert value not in json.dumps(result) + exported.text
+    if "Public context: investigate error 404." in text:
+        assert "Public context: investigate error 404." in exported.text
 
 
 def test_repeated_placeholders_are_consistent_within_request_and_reset_between_requests(client):

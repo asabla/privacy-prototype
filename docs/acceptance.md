@@ -18,7 +18,7 @@ The scope and retained risks are defined in the [threat model](threat-model.md).
 | R8 — Local service protections | Exact host/origin checks, HTTPS requirement for configured remote hosts, no wildcard CORS, security headers and text-only rendering have regression coverage. Native and container Browser walkthroughs work without current console errors. |
 | R9 — Reproducible operation | Locked native `make serve` passed all three HTTP/DOM flows. The real Compose service passed non-root/read-only/limits/loopback checks, blocked an external processor connection, completed review/export, and rejected old receipts after restart. Readiness requires nonempty successful inference and clears on failure. Real OPF also preloaded and ran all workflows with Python network calls denied. |
 | R10 — Explainable reference | README, [showcase](showcase.md), [service boundary](service-boundary.md), [review contract](review-contract.md), [runtime guide](runtime.md), current synthetic screenshots and [threat model](threat-model.md) cover audience, setup, trust, retention, limits and extension points. |
-| R11 — Reviewable delivery | Scoped pull requests, conventional commits, local gates, package audits and per-PR CI. PRs #2–#7 merged after their checks passed. Final delivery also requires the acceptance package's four CI jobs to pass before merge, followed by a clean updated main checkout. |
+| R11 — Reviewable delivery | Scoped pull requests, conventional commits, local gates, package audits and per-PR CI. PRs #2–#10 merged after their checks passed. Subsequent delivery requires all five current CI jobs to pass on the exact head before merge, followed by a clean updated main checkout. |
 
 ## Reproduction gates
 
@@ -107,3 +107,26 @@ assets prevented offline image startup; unit checks reject corrupt downloads and
 existing altered assets. Linux CI builds the CPU image and tests missing-asset
 failure without downloading weights. Full inference is the separate opt-in
 `make test-container-opf` gate, not an inference claim about regular CI.
+
+## Copied support logs and forwarded credentials
+
+Policy `2026-09-30.4` adds authentication and cookie header masking, wrapped header
+values, and credential blocks inside forwarded text. All 19 positive examples in
+the new 24-case support-log corpus failed the preceding policy. They now require
+complete annotated coverage without model assistance; the five negative examples
+must remain unchanged. Combined with the preceding corpus, 41 policy cases cover
+the deterministic safeguard. Model-only baseline measurements are unchanged.
+
+The local gate passed 173 Python tests, 21 UI tests and three DOM-to-HTTP workflows;
+both dependency audits reported zero known vulnerabilities. Real OPF passed all
+19 additional policy exports with Python outbound network calls denied, alongside
+the existing Unicode, empty-input, 25-email and three-workflow checks. The real
+OPF container gate also passed exact export, replay rejection, restart receipt
+invalidation, restricted execution and blocked external connectivity.
+
+The [support-log Browser walkthrough](support-log-review.md) used the real OPF
+container with an invented request header, cookie and forwarded credential block.
+It verified the actual download against the exact reviewed candidate, preserved
+the public troubleshooting context, and checked that export required confirmation.
+Browser storage stayed empty, requests remained local and there were no console
+errors. Clear removed the input and connection; the temporary project was stopped.
