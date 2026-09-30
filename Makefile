@@ -1,8 +1,10 @@
 PORT   ?= 8000
 OPF_SRC ?= .opf-src
 OPF_EXTRA = $(if $(wildcard .opf-enabled),--extra opf)
+OPF_TEST_ENV ?= .venv-opf
+EVAL_ARGS ?=
 
-.PHONY: help install run dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js audit audit-python audit-js check
+.PHONY: help install run dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js audit audit-python audit-js check eval eval-opf test-opf
 
 help:  ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,6 +47,15 @@ test-python: install
 test-js:
 	npm ci
 	npm test
+
+eval: install  ## Score the heuristic against the reviewed synthetic baseline
+	uv run --no-sync python -m evaluation.run --engine heuristic --baseline evaluation/heuristic-baseline.json $(EVAL_ARGS)
+
+eval-opf:  ## Evaluate real OPF in an isolated venv (may download model weights)
+	UV_PROJECT_ENVIRONMENT="$(OPF_TEST_ENV)" uv run --locked --extra opf python -m evaluation.run --engine opf $(EVAL_ARGS)
+
+test-opf:  ## Require real OPF and validate API inference over synthetic messages
+	UV_PROJECT_ENVIRONMENT="$(OPF_TEST_ENV)" uv run --locked --extra opf python -m evaluation.smoke
 
 check: test audit  ## Run regression tests and dependency vulnerability audits
 

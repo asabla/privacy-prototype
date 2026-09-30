@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "description": "Hand-labelled synthetic examples for regression evaluation. These are annotation conventions for this demo, not a production policy or a representative accuracy benchmark.",
+  "cases": [
+    {"id": "person-signature", "segments": ["Regards,\n", {"label": "private_person", "text": "Alice Smith"}]},
+    {"id": "person-unicode", "segments": ["My name is ", {"label": "private_person", "text": "Zoë Åberg"}, "."]},
+    {"id": "email-unicode-prefix", "segments": ["😀 Contact ", {"label": "private_email", "text": "alice@example.com"}, " 👩🏽‍💻"]},
+    {"id": "email-repeated", "segments": ["Send it to ", {"label": "private_email", "text": "alex@example.com"}, ", and confirm with ", {"label": "private_email", "text": "alex@example.com"}, "."]},
+    {"id": "phone-us", "segments": ["Personal phone: ", {"label": "private_phone", "text": "+1 (415) 555-0137"}]},
+    {"id": "phone-international", "segments": ["Call me at ", {"label": "private_phone", "text": "+44 7700 900123"}, "."]},
+    {"id": "address-street", "segments": ["My home address is ", {"label": "private_address", "text": "123 Example Street"}, "."]},
+    {"id": "address-unicode", "segments": ["Meine Privatadresse ist ", {"label": "private_address", "text": "Musterstraße 12, 10115 Berlin"}, "."]},
+    {"id": "url-private-document", "segments": ["My confidential medical document is at ", {"label": "private_url", "text": "https://example.com/patient/alex/report"}]},
+    {"id": "url-personal-profile", "segments": ["My private profile link: ", {"label": "private_url", "text": "https://example.org/users/alex-private"}]},
+    {"id": "date-iso", "segments": ["My date of birth is ", {"label": "private_date", "text": "1990-01-02"}, "."]},
+    {"id": "date-slash", "segments": ["Date of birth: ", {"label": "private_date", "text": "02/01/1990"}]},
+    {"id": "account-ssn", "segments": ["Synthetic test SSN: ", {"label": "account_number", "text": "000-12-3456"}]},
+    {"id": "account-routing", "segments": ["My account number is ", {"label": "account_number", "text": "123456789012"}, "."]},
+    {"id": "secret-assignment", "segments": ["Synthetic credential: Password=", {"label": "secret", "text": "example-value"}]},
+    {"id": "secret-after-signature", "segments": ["Regards,\n", {"label": "private_person", "text": "Alice Smith"}, "\nPassword=", {"label": "secret", "text": "example-value"}]},
+    {"id": "mixed-sensitive", "segments": ["I am ", {"label": "private_person", "text": "Alice Smith"}, ". Contact ", {"label": "private_email", "text": "alice@example.com"}, ". My date of birth is ", {"label": "private_date", "text": "1990-01-02"}, "."]},
+    {"id": "negative-empty", "segments": [""]},
+    {"id": "negative-plain", "segments": ["The build passed. Please review the release notes."]},
+    {"id": "negative-title", "segments": ["Quarterly Revenue Report is ready for review."]},
+    {"id": "negative-public-date", "segments": ["The public product release date is 2026-04-22."]}
+  ]
+}
