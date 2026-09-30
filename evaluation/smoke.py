@@ -61,8 +61,30 @@ def main() -> None:
                 if result["scan"][part]["text"] != result["email"][part]:
                     raise ValueError("Scan-all response did not preserve the original email")
                 validate_scan(result["scan"][part])
+        workflows = [
+            ("support_ticket", {"text": sample}),
+            ("ai_prompt", {"text": 'Summarize this example: password="example words"; token=demo'}),
+            ("email", {"sender": "Alice <alice@northwind.io>", "recipients": "Bob <bob@example.com>",
+                       "subject": "Support request", "body": sample}),
+        ]
+        for use_case, fields in workflows:
+            response = client.post("/api/prepare", json={"use_case": use_case, "fields": fields})
+            response.raise_for_status()
+            prepared = response.json()
+            candidate = prepared["candidate"]
+            if candidate["engine"] != "opf" or "alice.smith@gmail.com" in json.dumps(candidate):
+                raise ValueError("Real OPF workflow did not minimize the synthetic email address")
+            if use_case == "ai_prompt" and any(value in candidate["fields"]["text"] for value in ("example words", "demo")):
+                raise ValueError("Credential policy did not cover the known synthetic model misses")
+            payload = {"receipt": prepared["review"]["receipt"], "candidate": candidate, "confirmed": True}
+            exported = client.post("/api/review/export", json=payload)
+            exported.raise_for_status()
+            if exported.json()["candidate"] != candidate:
+                raise ValueError("Export did not preserve the reviewed candidate")
+            if client.post("/api/review/export", json=payload).status_code != 410:
+                raise ValueError("An export receipt was reusable")
         print(json.dumps({"engine": "opf", "unicode_sample": "passed", "empty_input": "passed",
-                          "corpus_emails": len(actual_ids), "status": "passed"}))
+                          "corpus_emails": len(actual_ids), "review_workflows": len(workflows), "status": "passed"}))
 
 
 if __name__ == "__main__":

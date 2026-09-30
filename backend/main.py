@@ -17,12 +17,19 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from backend.corpus import EMPLOYEES, INTERNAL_DOMAINS, get_corpus
 from backend.detector import LABELS, get_detector
 from backend.security import MAX_TEXT_CHARS, ServiceBoundary, Settings, error_response
+from backend.review import (
+    RECEIPT_TTL_SECONDS, WARNINGS, ExportRequest, PrepareRequest, ReceiptRequest,
+    ReviewError, ReviewStore, prepare,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_detector()
-    yield
+    try:
+        yield
+    finally:
+        app.state.reviews.clear()
 
 
 router = APIRouter()
@@ -135,6 +142,33 @@ def scan(req: ScanRequest, request: Request) -> dict[str, Any]:
     return result
 
 
+@router.post("/api/prepare")
+def prepare_for_review(req: PrepareRequest, request: Request) -> dict[str, Any]:
+    with inference_slot(request):
+        candidate, findings, summary = prepare(req, get_detector())
+        receipt = request.app.state.reviews.issue(candidate, summary)
+    return {"schema_version": 1, "offset_unit": "unicode_code_points",
+            "candidate": candidate.model_dump(), "findings": findings, "summary": summary,
+            "review": {"receipt": receipt, "expires_in_seconds": RECEIPT_TTL_SECONDS},
+            "warnings": WARNINGS}
+
+
+@router.post("/api/review/export")
+def export_review(req: ExportRequest, request: Request) -> dict[str, Any]:
+    return request.app.state.reviews.export(req.receipt, req.candidate)
+
+
+@router.post("/api/review/discard")
+def discard_review(req: ReceiptRequest, request: Request) -> dict[str, bool]:
+    request.app.state.reviews.discard(req.receipt)
+    return {"discarded": True}
+
+
+@router.get("/api/review/events")
+def review_events(request: Request) -> dict[str, Any]:
+    return {"events": request.app.state.reviews.events(), "retention": "last_128_until_restart"}
+
+
 @router.get("/api/scan-all")
 def scan_all(request: Request) -> dict[str, Any]:
     with inference_slot(request):
@@ -230,6 +264,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
     app.state.inference_gate = BoundedSemaphore(1)
+    app.state.reviews = ReviewStore()
     app.add_middleware(ServiceBoundary, settings=settings)
 
     @app.exception_handler(RequestValidationError)
@@ -240,6 +275,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def http_error(request: Request, exc: StarletteHTTPException):
         codes = {404: "not_found", 405: "method_not_allowed", 429: "processing_busy"}
         return error_response(exc.status_code, codes.get(exc.status_code, "request_rejected"))
+
+    @app.exception_handler(ReviewError)
+    async def review_error(request: Request, exc: ReviewError):
+        return error_response(exc.status, exc.code)
 
     app.include_router(router)
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR), name="assets")
