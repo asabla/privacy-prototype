@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "engine": "heuristic",
+  "dataset_sha256": "469ba8bcc697526cdd18b107bd830a129f7df56649cc1ed7dcc0731a92f81a5b",
+  "case_count": 28,
+  "exact_spans": {
+    "true_positives": 13,
+    "false_positives": 8,
+    "false_negatives": 15,
+    "precision": 0.619048,
+    "recall": 0.464286
+  },
+  "redaction": {
+    "sensitive_characters": 555,
+    "unredacted_sensitive_characters": 306,
+    "extra_redacted_characters": 71,
+    "sensitive_character_coverage": 0.448649
+  },
+  "by_label": {
+    "private_person": {
+      "true_positives": 3,
+      "false_positives": 3,
+      "false_negatives": 4,
+      "precision": 0.5,
+      "recall": 0.428571
+    },
+    "private_email": {
+      "true_positives": 6,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "private_phone": {
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.5
+    },
+    "private_address": {
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 2,
+      "precision": 1.0,
+      "recall": 0.333333
+    },
+    "private_url": {
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    "private_date": {
+      "true_positives": 1,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "precision": 0.333333,
+      "recall": 1.0
+    },
+    "account_number": {
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.5
+    },
+    "secret": {
+      "true_positives": 0,
+      "false_positives": 2,
+      "false_negatives": 6,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  },
+  "cases": [
+    {
+      "id": "sv-name-diacritics",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 13,
+      "unredacted_sensitive_characters": 13,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-hyphenated-name",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 15,
+      "unredacted_sensitive_characters": 15,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-street-address",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 32,
+      "unredacted_sensitive_characters": 32,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-multiline-address",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 31,
+      "unredacted_sensitive_characters": 31,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-date-of-birth",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 10,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-private-phone",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 16,
+      "unredacted_sensitive_characters": 16,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-synthetic-personnummer",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 13,
+      "unredacted_sensitive_characters": 13,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "sv-negative-company",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": null,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "forwarded-headers",
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 52,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "forwarded-quoted-repetition",
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.666667,
+      "sensitive_characters": 43,
+      "unredacted_sensitive_characters": 13,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "forwarded-signature",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 46,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "forwarded-negative-release",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.0,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 10
+    },
+    {
+      "id": "credential-json-quoted-key",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 13,
+      "unredacted_sensitive_characters": 13,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "credential-json-escaped-quote",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 24,
+      "unredacted_sensitive_characters": 24,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "credential-multiline-quoted",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 38,
+      "unredacted_sensitive_characters": 31,
+      "extra_redacted_characters": 10
+    },
+    {
+      "id": "credential-yaml-literal",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 40,
+      "unredacted_sensitive_characters": 40,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "credential-yaml-folded",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": null,
+      "recall": 0.0,
+      "sensitive_characters": 40,
+      "unredacted_sensitive_characters": 40,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "credential-unfinished-quote",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 24,
+      "unredacted_sensitive_characters": 17,
+      "extra_redacted_characters": 7
+    },
+    {
+      "id": "credential-negative-fields",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": null,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "credential-negative-instructions",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": null,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "unicode-combining-name",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 11,
+      "unredacted_sensitive_characters": 8,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "unicode-adjacent-emoji",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 17,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "boundary-plus-address",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 25,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "boundary-private-url",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 40,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 2
+    },
+    {
+      "id": "boundary-short-account",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 12,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "negative-product-names",
+      "true_positives": 0,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "precision": 0.0,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 32
+    },
+    {
+      "id": "negative-software-version",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": null,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "negative-public-date-swedish",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.0,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 10
+    }
+  ],
+  "groups": {
+    "boundaries": {
+      "case_count": 4,
+      "exact_spans": {
+        "true_positives": 3,
+        "false_positives": 1,
+        "false_negatives": 1,
+        "precision": 0.75,
+        "recall": 0.75
+      },
+      "sensitive_characters": 94,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 2
+    },
+    "credentials": {
+      "case_count": 8,
+      "exact_spans": {
+        "true_positives": 0,
+        "false_positives": 2,
+        "false_negatives": 6,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "sensitive_characters": 179,
+      "unredacted_sensitive_characters": 165,
+      "extra_redacted_characters": 17
+    },
+    "forwarded": {
+      "case_count": 4,
+      "exact_spans": {
+        "true_positives": 9,
+        "false_positives": 1,
+        "false_negatives": 1,
+        "precision": 0.9,
+        "recall": 0.9
+      },
+      "sensitive_characters": 141,
+      "unredacted_sensitive_characters": 13,
+      "extra_redacted_characters": 10
+    },
+    "multiline": {
+      "case_count": 5,
+      "exact_spans": {
+        "true_positives": 3,
+        "false_positives": 1,
+        "false_negatives": 4,
+        "precision": 0.75,
+        "recall": 0.428571
+      },
+      "sensitive_characters": 195,
+      "unredacted_sensitive_characters": 142,
+      "extra_redacted_characters": 10
+    },
+    "negative": {
+      "case_count": 7,
+      "exact_spans": {
+        "true_positives": 0,
+        "false_positives": 4,
+        "false_negatives": 0,
+        "precision": 0.0,
+        "recall": null
+      },
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 52
+    },
+    "swedish": {
+      "case_count": 9,
+      "exact_spans": {
+        "true_positives": 1,
+        "false_positives": 1,
+        "false_negatives": 6,
+        "precision": 0.5,
+        "recall": 0.142857
+      },
+      "sensitive_characters": 130,
+      "unredacted_sensitive_characters": 120,
+      "extra_redacted_characters": 10
+    },
+    "unicode": {
+      "case_count": 5,
+      "exact_spans": {
+        "true_positives": 3,
+        "false_positives": 1,
+        "false_negatives": 4,
+        "precision": 0.75,
+        "recall": 0.428571
+      },
+      "sensitive_characters": 99,
+      "unredacted_sensitive_characters": 49,
+      "extra_redacted_characters": 0
+    }
+  },
+  "baseline_failures": []
+}

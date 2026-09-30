@@ -45,7 +45,7 @@ def test_prepare_review_export_all_use_cases(client, use_case):
                   "subject": "Question from alice@example.com", "body": "Contact alice@example.com."}
     result = prepared(client, use_case, fields=fields)
     candidate = result["candidate"]
-    assert candidate["policy_version"] == "2026-09-30.2"
+    assert candidate["policy_version"] == "2026-09-30.3"
     assert candidate["engine"] == "heuristic"
     assert result["offset_unit"] == "unicode_code_points"
     assert "alice@example.com" not in json.dumps(result)
@@ -205,18 +205,26 @@ def test_annotated_credential_policy_coverage_without_model_help(case):
         assert not findings and candidate.fields["text"] == case.text
     for _, start, end in case.expected:
         assert case.text[start:end] not in candidate.fields["text"]
+    for context in ("public_note: keep this", "public note", "Continue investigating the login error."):
+        if context in case.text:
+            assert context in candidate.fields["text"]
 
 
 @pytest.mark.parametrize("use_case", ["support_ticket", "ai_prompt", "email"])
-def test_json_credentials_stay_out_of_review_and_export(client, use_case):
-    text = '{"password": "synthetic sensitive words", "api_key": "demo"}'
+@pytest.mark.parametrize("text,values", [
+    ('{"password": "synthetic sensitive words", "api_key": "demo"}', ("synthetic sensitive words", "demo")),
+    ('password="example first line\nexample second line"', ("example first line", "example second line")),
+    ('password: |\n  example first line\n  example second line\npublic_note: investigate',
+     ("example first line", "example second line")),
+])
+def test_credentials_stay_out_of_review_and_export(client, use_case, text, values):
     fields = {"text": text}
     if use_case == "email":
         fields = {"sender": "alice@northwind.io", "recipients": "bob@example.com", "subject": "", "body": text}
     result = prepared(client, use_case, fields=fields)
     exported = client.post("/api/review/export", json=export_payload(result))
     assert exported.status_code == 200
-    for value in ("synthetic sensitive words", "demo"):
+    for value in values:
         assert value not in json.dumps(result) + exported.text
 
 

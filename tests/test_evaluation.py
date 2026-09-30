@@ -109,9 +109,35 @@ def test_smoke_validation_rejects_heuristic_results():
         validate_scan(Detector(engine="heuristic").detect("hello").to_dict())
 
 
-def test_reviewed_heuristic_baseline():
+@pytest.mark.parametrize("dataset,reference", [
+    ("cases.json", "heuristic-baseline.json"),
+    ("extended-cases.json", "heuristic-extended-baseline.json"),
+])
+def test_reviewed_heuristic_baseline(dataset, reference):
     root = Path(__file__).resolve().parents[1] / "evaluation"
-    cases, digest = load_cases(root / "cases.json")
-    baseline = json.loads((root / "heuristic-baseline.json").read_text())
+    cases, digest = load_cases(root / dataset)
+    baseline = json.loads((root / reference).read_text())
     report = evaluate(cases, Detector(engine="heuristic"), digest)
     assert check_baseline(report, baseline) == []
+
+
+def test_overlapping_groups_are_scored_without_double_counting():
+    cases = [Case("positive", "alice@example.com", (("private_email", 0, 17),), ("unicode", "email")),
+             Case("negative", "nothing", (), ("unicode",))]
+    report = evaluate(cases, Detector("heuristic"), "digest")
+    assert report["case_count"] == 2
+    assert report["exact_spans"]["true_positives"] == 1
+    assert report["groups"]["email"]["case_count"] == 1
+    assert report["groups"]["unicode"]["case_count"] == 2
+    assert report["groups"]["unicode"]["sensitive_characters"] == 17
+    assert "alice@example.com" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("groups", ["swedish", ["swedish", "swedish"], ["raw@example.com"], [12]])
+def test_invalid_groups_fail(tmp_path, groups):
+    dataset = tmp_path / "cases.json"
+    dataset.write_text(json.dumps({"schema_version": 1, "cases": [
+        {"id": "case", "groups": groups, "segments": ["text"]},
+    ]}))
+    with pytest.raises(ValueError, match="groups"):
+        load_cases(dataset)
