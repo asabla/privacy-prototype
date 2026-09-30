@@ -79,5 +79,13 @@ statements for implementation.
   manual ranges, supplementary credential rules, fully removed email routing
   fields, and expiring one-use export receipts. The review store retains only keyed
   fingerprints and metadata. Local gate: 94 Python and 9 frontend tests plus both
-  dependency audits. Remote CI and merge remain the next gate for this package.
-- R1–R11 as a whole are not yet proven; W3–W5 remain.
+  dependency audits, and real OPF execution/export for all three workflows. Merged
+  as PR #5 after all CI jobs passed; main updated with rebase.
+- W3 implemented: `/workbench` supports all three workflows, manual masks, explicit
+  review, exact text download/copy, expiry, and clear/reset. Local evidence: 94
+  Python tests, 18 frontend tests, and three DOM-to-HTTP workflow tests, with clean
+  audits. Browser plugin walkthroughs saved and inspected actual downloads for
+  support tickets, prompts, and email; clipboard, empty storage, local-only requests,
+  and clear/reset were checked. Mobile geometry at 390px has no horizontal overflow.
+  Remote CI and merge remain the next gate for this package.
+- R1–R11 as a whole are not yet proven; W4–W5 remain.

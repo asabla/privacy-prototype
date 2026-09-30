@@ -131,6 +131,11 @@ def corpus() -> dict[str, Any]:
     return {"emails": [e.to_dict() for e in get_corpus()]}
 
 
+@router.get("/api/session")
+def operator_session() -> dict[str, Any]:
+    return {"engine": get_detector().engine, "max_text_chars": MAX_TEXT_CHARS}
+
+
 @router.post("/api/scan")
 def scan(req: ScanRequest, request: Request) -> dict[str, Any]:
     with inference_slot(request):
@@ -290,6 +295,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/workbench")
+    def workbench() -> FileResponse:
+        return FileResponse(FRONTEND_DIR / "workbench.html")
 
     return app
 
