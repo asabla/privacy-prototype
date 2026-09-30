@@ -4,7 +4,7 @@ OPF_EXTRA = $(if $(wildcard .opf-enabled),--extra opf)
 OPF_TEST_ENV ?= .venv-opf
 EVAL_ARGS ?=
 
-.PHONY: help install run serve dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js test-workbench-api test-container audit audit-python audit-js check eval eval-extended eval-opf test-opf test-opf-offline
+.PHONY: help install run serve dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js test-workbench-api test-container test-container-opf audit audit-python audit-js check eval eval-extended eval-opf test-opf test-opf-offline
 
 help:  ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -57,6 +57,9 @@ test-workbench-api: install test-js  ## Exercise the actual workbench against au
 test-container:  ## Build and verify the isolated Compose service (requires Docker)
 	python3 -m evaluation.container_smoke
 
+test-container-opf:  ## Verify real CPU OPF in Compose with provisioned OPF_ASSETS_DIR
+	python3 -m evaluation.container_smoke --opf
+
 eval: install  ## Score the heuristic against the reviewed synthetic baseline
 	uv run --no-sync python -m evaluation.run --engine heuristic --baseline evaluation/heuristic-baseline.json $(EVAL_ARGS)
 
@@ -79,6 +82,7 @@ audit: audit-python audit-js  ## Audit locked Python and JavaScript dependencies
 audit-python: install
 	@set -eu; requirements=$$(mktemp); trap 'rm -f "$$requirements"' EXIT; \
 	uv export --locked --all-extras --no-emit-project --no-emit-package opf --no-header --no-annotate > "$$requirements"; \
+	uv run --no-sync python -m evaluation.audit_requirements "$$requirements"; \
 	uv run --no-sync pip-audit --strict --disable-pip --require-hashes -r "$$requirements"
 
 audit-js:

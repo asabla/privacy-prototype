@@ -1,5 +1,6 @@
 """Build and exercise the actual Compose service using only synthetic data."""
 
+import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -16,10 +17,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--opf", action="store_true", help="Require provisioned real OPF assets via OPF_ASSETS_DIR")
+    args = parser.parse_args()
+    engine = "opf" if args.opf else "heuristic"
+    if args.opf:
+        from ops.model_assets import verify
+        assets = Path(os.environ["OPF_ASSETS_DIR"]).resolve()
+        verify(assets)
     key = secrets.token_urlsafe(32)
     env = {**os.environ, "SENTINEL_API_KEY": key, "PORT": "0"}
     project = "sentinel-check-" + secrets.token_hex(4)
     compose = ["docker", "compose", "--project-name", project, "--file", str(ROOT / "compose.yaml")]
+    if args.opf:
+        env["OPF_ASSETS_DIR"] = str(assets)
+        compose += ["--file", str(ROOT / "compose.opf.yaml")]
 
     def run(*args):
         # Do not print expanded Compose environment or Docker inspection payloads.
@@ -31,16 +43,24 @@ def main():
 
     try:
         print("Building and starting the isolated reference container", flush=True)
-        run(*compose, "up", "--build", "--detach", "--wait", "--wait-timeout", "90")
+        run(*compose, "up", "--build", "--detach", "--wait", "--wait-timeout", "180")
         container = run(*compose, "ps", "--quiet", "sentinel")
         info = json.loads(run("docker", "inspect", container))[0]
         config, host = info["Config"], info["HostConfig"]
         assert config["User"] == "10001:10001", "Container must not run as root"
         assert host["ReadonlyRootfs"] and host["CapDrop"] == ["ALL"]
         assert "no-new-privileges:true" in host["SecurityOpt"]
-        assert host["Memory"] == 512 * 1024 * 1024 and host["PidsLimit"] == 64
+        assert host["Memory"] == (8192 if args.opf else 512) * 1024 * 1024
+        assert host["PidsLimit"] == (128 if args.opf else 64)
+        mounts = info["Mounts"]
+        if args.opf:
+            models = [mount for mount in mounts if mount["Destination"] == "/models"]
+            assert len(models) == 1 and models[0]["Type"] == "bind" and not models[0]["RW"]
+            mounts = [mount for mount in mounts if mount["Destination"] != "/models"]
+            run("docker", "exec", container, "python", "-c",
+                "import torch; assert torch.version.cuda is None; assert torch.__version__ == '2.14.0+cpu'")
         assert all(mount["Type"] == "tmpfs" and mount["Destination"] == "/tmp"
-                   for mount in info["Mounts"]), "Reference must not mount persistent data"
+                   for mount in mounts), "No persistent input storage may be mounted"
         assert not info["NetworkSettings"]["Ports"], "Processor must not publish ports"
         proxy = json.loads(run("docker", "inspect", run(*compose, "ps", "--quiet", "browser")))[0]
         assert proxy["Config"]["User"] == "101:101" and proxy["HostConfig"]["ReadonlyRootfs"]
@@ -69,7 +89,8 @@ def main():
                 body = response.read().decode()
                 return response.status, body, response.headers
 
-        assert request("/ready")[0] == 200
+        status, body, _ = request("/ready")
+        assert status == 200 and json.loads(body)["engine"] == engine
         assert request("/workbench")[0] == 200
         assert request("/api/session", authenticated=False)[0] == 401
         assert request("/api/scan", {"text": "x" * 65_537})[0] == 413
@@ -77,7 +98,7 @@ def main():
         status, body, _ = request("/api/scan", {"text": {sentinel: sentinel}})
         assert status == 422 and sentinel not in body
         workflows = [
-            ("support_ticket", {"text": "Contact alice@example.com; password=demo"}),
+            ("support_ticket", {"text": 'Contact alice@example.com; password="example first\nexample second"'}),
             ("ai_prompt", {"text": "Summarize alice@example.com; token=demo"}),
             ("email", {"sender": "alice@northwind.io", "recipients": "bob@example.com",
                        "subject": "Help for alice@example.com", "body": "password=demo"}),
@@ -86,7 +107,8 @@ def main():
             status, body, headers = request("/api/prepare", {"use_case": use_case, "fields": fields})
             assert status == 200 and headers["cache-control"] == "no-store"
             prepared = json.loads(body)
-            assert "alice@example.com" not in body and "=demo" not in body
+            assert prepared["candidate"]["engine"] == engine
+            assert all(value not in body for value in ("alice@example.com", "=demo", "example first", "example second"))
             payload = {"receipt": prepared["review"]["receipt"], "candidate": prepared["candidate"], "confirmed": True}
             status, body, _ = request("/api/review/export", payload)
             assert status == 200 and json.loads(body)["candidate"] == payload["candidate"]
@@ -95,14 +117,14 @@ def main():
         # Exercise bounded real HTTP load; the exact busy count is scheduling dependent.
         with ThreadPoolExecutor(max_workers=8) as pool:
             statuses = Counter(pool.map(lambda _: request("/api/scan", {
-                "text": "Contact alice@example.com. " * 80,
+                "text": "Contact alice@example.com. " * (20 if args.opf else 80),
             })[0], range(32)))
         assert set(statuses) <= {200, 429, 503} and statuses[200] > 0
         assert request("/api/scan", {"text": "recovered"})[0] == 200
         _, body, _ = request("/api/prepare", {"use_case": "support_ticket", "fields": {"text": "alice@example.com"}})
         pending = json.loads(body)
         run(*compose, "restart", "sentinel")
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + 180
         while True:
             try:
                 if request("/ready")[0] == 200:
@@ -115,8 +137,8 @@ def main():
         assert request("/api/review/export", {"receipt": pending["review"]["receipt"],
             "candidate": pending["candidate"], "confirmed": True})[0] == 410
         logs = run(*compose, "logs", "--no-color")
-        assert all(value not in logs for value in (key, sentinel, "alice@example.com", "password=demo"))
-        print(json.dumps({"status": "passed", "engine": "heuristic", "review_workflows": 3,
+        assert all(value not in logs for value in (key, sentinel, "alice@example.com", "password=demo", "example first"))
+        print(json.dumps({"status": "passed", "engine": engine, "review_workflows": 3,
                           "burst_statuses": statuses, "restart_receipt_rejected": True,
                           "non_root": True, "read_only": True, "external_connection_blocked": True}))
     finally:

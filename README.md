@@ -47,8 +47,8 @@ inspection view.
 
 For a preloaded native service or a non-root, read-only container, follow the
 [runtime guide](docs/runtime.md). `/health` checks HTTP; `/ready` requires successful
-inference. The container uses the heuristic explicitly, while the native service
-can require real OPF without silent fallback.
+inference. The default container uses the heuristic; `compose.opf.yaml` adds real
+CPU OPF with verified read-only assets and blocked processor egress.
 The [threat model](docs/threat-model.md) describes trust and retention boundaries;
 the [acceptance record](docs/acceptance.md) connects each requirement to its evidence.
 
@@ -135,8 +135,9 @@ The selection is saved in the ignored `.opf-enabled` file. Subsequent `make inst
 is pinned in `pyproject.toml` and resolved in `uv.lock`; no editable clone is required.
 
 The first non-empty scan downloads missing model weights to `~/.opf/privacy_filter`.
-Set `OPF_CHECKPOINT` to use an existing checkpoint directory. CPU is the default;
-use `OPF_DEVICE=cuda make run` on a CUDA-capable machine. The engine command reports
+Set `OPF_CHECKPOINT` to use an existing checkpoint directory. CPU is the supported
+reference path, with Linux CPU wheels pinned to Torch 2.14.0. GPU operation requires
+a separately reviewed dependency configuration. The engine command reports
 adapter selection; use `make scan` to exercise inference.
 An unavailable OPF package selects the heuristic. A broken installed OPF dependency
 or invalid model configuration raises an error instead of silently changing engines.
@@ -158,6 +159,7 @@ make test           # Python/API/engine-workflow tests, then frontend DOM tests
 make check          # tests plus Python and npm vulnerability audits
 make test-workbench-api  # actual workbench DOM against an authenticated HTTP service
 make test-container     # build and exercise the actual restricted Compose service
+make test-container-opf # same gate with real CPU OPF; requires provisioned OPF_ASSETS_DIR
 make test-opf-offline   # cached real-model preload/workflows with Python network calls denied
 ```
 
@@ -173,11 +175,14 @@ manual masks and receipt replay rejection.
 
 The Python audit exports locked default, development, and optional OPF dependencies
 and checks registry packages applicable to the current platform without installing
-the model stack. The pinned OPF Git revision itself has no PyPI advisory record and
+the model stack. For advisory lookup only, Torch's `+cpu` version maps to the same
+upstream release because PyPI does not register CPU wheel variants. Installation
+still uses the CPU index and exact hashes in `uv.lock`. The pinned OPF Git revision itself has no PyPI advisory record and
 is excluded from that audit. `npm audit` includes frontend test dependencies.
 Audits require network access; Dependabot proposes weekly uv, npm, and Actions updates.
 It also tracks the digest-pinned Docker base images. CI builds the container and
 checks its runtime restrictions, reviewed exports, overload recovery, and restart.
+It also builds the OPF CPU image and checks that missing assets prevent startup.
 
 Scan responses declare `offset_unit: "unicode_code_points"`. Span offsets are
 zero-based, start-inclusive and end-exclusive. Both engines normalize overlapping
