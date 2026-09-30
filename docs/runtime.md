@@ -41,9 +41,9 @@ this reference does not claim to safely interrupt arbitrary native inference.
 
 ## Container demonstration
 
-The container intentionally uses the heuristic. It demonstrates the complete review
-contract without packaging model weights or downloading at startup. The native OPF
-path below validates real-model operation separately.
+The default container uses the heuristic and demonstrates the complete review
+contract without model weights. The real-model override below retains the same
+network boundary and review API.
 
 ```sh
 export SENTINEL_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
@@ -86,7 +86,68 @@ The exact busy count depends on scheduling; a fast heuristic run can accept ever
 request. A separate deterministic test holds the inference slot and proves that
 competing requests get `429`, then succeed after release.
 
-## Preload and verify real OPF without network access
+## Real OPF container
+
+Provision public model assets before accepting any input. This setup command uses
+only the pinned public URLs in `ops/model_assets.py`; it does not use saved registry
+credentials or send application data. Existing files are verified, never silently
+replaced. Failed downloads are removed. The checkpoint revision is
+`7ffa9a043d54d1be65afb281eddf0ffbe629385b`; all four checkpoint files and the
+`o200k_base` tokenizer have fixed byte counts and SHA-256 digests.
+
+```sh
+export OPF_ASSETS_DIR="$PWD/.model-assets"
+python3 -m ops.model_assets --download
+python3 -m ops.model_assets                 # verify existing files, no network
+export SENTINEL_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+# Transfer the key to the workbench through your clipboard; never print or commit it.
+docker compose -f compose.yaml -f compose.opf.yaml up --build --detach --wait --wait-timeout 180
+# Open http://127.0.0.1:8000/workbench and connect.
+docker compose -f compose.yaml -f compose.opf.yaml down
+```
+
+Use Python 3.11 or newer for the standalone asset helper. The application uses
+Python 3.14. The asset directory must be absolute, readable by UID 10001 and
+available to the Docker daemon as a bind mount. The default `.model-assets/` is
+ignored by Git and excluded from the image build context. A private host temporary
+directory may not be shared with Docker; choose a shared local path instead of
+changing the network or filesystem protections. The download command requires
+network access during setup; verification and service startup do not.
+
+The `opf` image target installs the pinned OPF package and Torch 2.14.0 CPU wheels
+from the [official CPU index](https://download.pytorch.org/whl/cpu/torch/), using
+[uv's explicit index selection](https://docs.astral.sh/uv/guides/integration/pytorch/).
+Linux GPU libraries are not installed. Git and uv stay in the
+build stage. Model weights remain outside the image and are mounted read-only at
+`/models`. Startup verifies every asset digest before model preload; missing or
+changed assets stop the process. It requires OPF, forces CPU and offline Hugging
+Face settings, and uses the preloaded tokenizer cache. No runtime download or
+heuristic fallback is allowed by this path.
+
+The override sets an 8 GiB memory limit and 128-process limit; the two-CPU cap,
+read-only root, 16 MiB temporary filesystem, non-root user, dropped capabilities,
+disabled core dumps and internal-only processor network are inherited. These are
+the tested resource settings, not minimum requirements or a throughput guarantee.
+The host and proxy remain trusted. Host administrators can still read or change
+mounted model files and inspect process memory.
+
+```sh
+make test-container-opf
+```
+
+This opt-in gate verifies real model readiness, CPU-only imports, read-only model
+mounts, blocked external connections, all three review/export workflows, multiline
+credential coverage, burst rejection/recovery, receipt invalidation after restart,
+and absence of test inputs in container logs. It removes its temporary Compose
+project. Regular Linux CI builds the CPU image and proves that offline startup with
+missing assets fails; it does not download model weights or claim inference coverage.
+The complete gate was run against the real checkpoint on Linux/arm64 from this
+macOS checkout. GPU execution is outside the validated path.
+
+Model provenance: [pinned checkpoint](https://huggingface.co/openai/privacy-filter/tree/7ffa9a043d54d1be65afb281eddf0ffbe629385b/original),
+[public tokenizer](https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken).
+
+## Native OPF without network access
 
 Install the pinned optional dependencies with `make install-opf`. In a controlled
 setup phase, populate the model checkpoint and tokenizer cache using synthetic

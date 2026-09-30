@@ -8,3 +8,4 @@ node_modules/
 .opf-src/
 .pytest_cache/
 .playwright-mcp/
+.model-assets/

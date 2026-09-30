@@ -8,7 +8,7 @@ import { matchingMasks, mountWorkbench, reviewedText } from "../frontend/workben
 const html = await readFile(new URL("../frontend/workbench.html", import.meta.url), "utf8");
 const response = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
 function resultFor(body) {
-  return { candidate: { use_case: body.use_case, policy_version: "2026-09-30.2", engine: "heuristic",
+  return { candidate: { use_case: body.use_case, policy_version: "2026-09-30.3", engine: "heuristic",
     fields: Object.fromEntries(Object.entries(body.fields).map(([key, value]) => [key,
       ["sender", "recipients"].includes(key) ? `[${key.toUpperCase()}_REMOVED]` : value.replaceAll("alice@example.com", "[PRIVATE_EMAIL_1]")])), routing: null },
     findings: [], summary: { span_count: 1, manual_mask_count: body.manual_masks.length },
@@ -90,6 +90,35 @@ test("confirmed export copies and downloads only the exact reviewed candidate", 
   assert.equal(ui.$("candidateFields").textContent, "");
   assert.equal(ui.$("download").disabled, true);
 });
+
+test("editing a ticket while connecting still completes authentication", async (t) => {
+  let finish;
+  const ui = workbench(t, (url) => url === "/api/session" ? new Promise((resolve) => {
+    finish = () => resolve(response({ engine: "opf" }));
+  }) : undefined);
+  await ui.connect();
+  ui.input("source-text", "Synthetic ticket entered while the connection is pending");
+  finish(); await setImmediate();
+  assert.equal(ui.$("connectionState").textContent, "Connected");
+  assert.equal(ui.$("analyze").disabled, false);
+  assert.equal(ui.$("engine").textContent, "Privacy Filter");
+});
+
+for (const change of ["clear", "key"]) {
+  test(`late connection cannot restore authentication after ${change}`, async (t) => {
+    let finish;
+    const ui = workbench(t, (url) => url === "/api/session" ? new Promise((resolve) => {
+      finish = () => resolve(response({ engine: "opf" }));
+    }) : undefined);
+    await ui.connect();
+    if (change === "clear") await ui.click("clearAll");
+    else ui.input("operatorKey", "different-synthetic-key-for-tests");
+    finish(); await setImmediate();
+    assert.equal(ui.$("connectionState").textContent, "Locked");
+    assert.equal(ui.$("analyze").disabled, true);
+    assert.equal(ui.$("engine").textContent, "Not connected");
+  });
+}
 
 test("manual masks use Unicode code points and source edits invalidate them", async (t) => {
   const ui = workbench(t);

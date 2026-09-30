@@ -31,7 +31,7 @@ make test-opf-offline OPF_TEST_ENV=/absolute/path/to/opf-venv
 make eval-opf OPF_TEST_ENV=/absolute/path/to/opf-venv
 ```
 
-The local final code checks passed 114 Python tests, 18 frontend tests, and three
+The initial reference code checks passed 114 Python tests, 18 frontend tests, and three
 DOM-to-HTTP workflows. Python and npm audits reported no known vulnerabilities.
 GitHub's eight previous dependency alerts are now marked fixed; the obsolete idna
 3.15 update PR was closed because the merged lock already resolves idna 3.20.
@@ -41,11 +41,11 @@ upstream Git code, model weights or future advisories.
 The container runtime gate runs on Linux in CI and was also verified locally on
 macOS with Docker's arm64 images. It creates an isolated Compose project and removes
 its containers and networks afterward. Native real-model checks used CPU and the
-checkpoint revision recorded in the runtime guide; GPU operation and OPF-in-container
-packaging are outside this validated path.
+checkpoint revision recorded in the runtime guide. Subsequent OPF container evidence
+is recorded below; GPU operation remains outside the validated path.
 
-GitHub Actions has four jobs: regression/audits, UI on Node 22.22.2, UI on Node 26,
-and actual container runtime. See the [current workflow runs](https://github.com/asabla/privacy-prototype/actions/workflows/checks.yml)
+GitHub Actions now has five jobs: regression/audits, UI on Node 22.22.2, UI on Node 26,
+heuristic container runtime and CPU OPF image checks. See the [current workflow runs](https://github.com/asabla/privacy-prototype/actions/workflows/checks.yml)
 and [merged change history](https://github.com/asabla/privacy-prototype/pulls?q=is%3Apr+is%3Amerged).
 Check the exact head being merged; a prior green revision is not sufficient.
 
@@ -71,3 +71,39 @@ The real-model smoke check passed nonempty preload, readiness, Unicode offsets,
 empty input, all 25 synthetic inbox emails, and three policy-bound exports with
 replay rejection. Its offline variant denied Python outbound socket/DNS calls while
 running these checks. A deployment still needs its own host and egress controls.
+
+## Follow-up evaluation and real-model container
+
+The [expanded evaluation](expanded-evaluation.md) adds 28 authored cases without
+changing the original baseline. Its real-model report retains 271 uncovered
+sensitive characters out of 555, so automatic sharing remains unsupported. Policy
+`2026-09-30.3` separately fixes multiline quoted and YAML-block credentials; 17
+policy cases and all three API workflows test those safeguards without changing
+model-only scores. PR #9 merged after all four existing CI jobs passed.
+
+The subsequent local check passed 140 Python tests, 21 frontend tests and three
+DOM-to-HTTP workflows, with zero known vulnerabilities in either dependency audit.
+Both container targets built and passed their complete runtime checks. Real OPF
+ran in Linux/arm64 with the pinned checkpoint and read-only assets: readiness,
+three exports, replay rejection, blocked external connection, and restart receipt
+invalidation passed. Its 32-request burst produced one successful response and 31
+busy responses, followed by successful recovery. The heuristic accepted all 32.
+These measured results are not throughput guarantees.
+
+The Browser plugin exercised a [realistic synthetic support ticket](support-ticket-walkthrough.md)
+against the OPF container. Model detections, multiline credential policy, a manual
+address mask and explicit confirmation produced the exact bytes downloaded by the
+browser. Browser storage was empty, all recorded page/API requests stayed on the
+local service, and there were no console errors. Clear removed the source and
+connection; the temporary container project was stopped afterward.
+The walkthrough also reproduced and fixed a connection race: editing source text
+while authentication was pending left the UI locked after a successful response.
+Three UI regressions now cover that edit and late responses after clear/key changes;
+the fixed behavior was exercised against the container with a delayed real request.
+
+Public configuration/tokenizer provisioning and all five asset checksums passed.
+The already-downloaded checkpoint was reused after checksum verification. Missing
+assets prevented offline image startup; unit checks reject corrupt downloads and
+existing altered assets. Linux CI builds the CPU image and tests missing-asset
+failure without downloading weights. Full inference is the separate opt-in
+`make test-container-opf` gate, not an inference claim about regular CI.

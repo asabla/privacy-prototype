@@ -10,3 +10,5 @@
 !frontend/*.css
 !frontend/*.js
 !frontend/*.svg
+!ops/
+!ops/model_assets.py

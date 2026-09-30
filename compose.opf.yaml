@@ -1,0 +1,17 @@
+# Use together with compose.yaml. Assets are provisioned before accepting input.
+services:
+  sentinel:
+    build:
+      context: .
+      target: opf
+    mem_limit: 8g
+    pids_limit: 128
+    volumes:
+      - type: bind
+        source: ${OPF_ASSETS_DIR:?Set an absolute path to verified model assets}
+        target: /models
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      start_period: 120s
