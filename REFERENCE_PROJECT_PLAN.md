@@ -73,6 +73,11 @@ statements for implementation.
   inspection opt-in, sanitized errors, host/origin controls, body and inference
   limits, browser headers, and documented service boundary. Local evidence: 64
   Python and 9 frontend tests, dependency audits, real OPF API checks over all 25
-  fixture emails, and a live browser check with no console errors. Remote CI and
-  merge remain the next gate for this package.
-- R1–R11 as a whole are not yet proven; W2–W5 remain.
+  fixture emails, and a live browser check with no console errors. Merged as PR #4
+  after all three CI jobs passed; main updated with rebase.
+- W2 implemented: three versioned policies, consistent request-scoped placeholders,
+  manual ranges, supplementary credential rules, fully removed email routing
+  fields, and expiring one-use export receipts. The review store retains only keyed
+  fingerprints and metadata. Local gate: 94 Python and 9 frontend tests plus both
+  dependency audits. Remote CI and merge remain the next gate for this package.
+- R1–R11 as a whole are not yet proven; W3–W5 remain.

@@ -27,6 +27,9 @@ for authentication, limits, response contracts, and deployment requirements.
 
 The [reference-project plan](REFERENCE_PROJECT_PLAN.md) tracks the remaining work
 for support-ticket sharing, AI-prompt preparation, and email review/export.
+The authenticated [review API](docs/review-contract.md) implements these policies,
+manual masks, and one-use reviewed exports. The existing inbox remains a synthetic
+inspection view; the interactive workbench is still being built.
 
 ### Decisions needed before a real-mail pilot
 
