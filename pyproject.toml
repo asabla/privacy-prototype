@@ -9,5 +9,15 @@ dependencies = [
     "pydantic>=2.5",
 ]
 
+[project.optional-dependencies]
+opf = ["opf @ git+https://github.com/openai/privacy-filter@f7f00ca7fb869683eb732c010299d901457f19c3"]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27"]
+
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

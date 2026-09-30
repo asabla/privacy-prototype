@@ -1,15 +1,6 @@
 // Sentinel — privacy detector PoC
 
-const LABEL_META = {
-  private_person:  { short: "Person",   hex: "#a78bfa" },
-  private_email:   { short: "Email",    hex: "#22d3ee" },
-  private_phone:   { short: "Phone",    hex: "#38bdf8" },
-  private_address: { short: "Address",  hex: "#f472b6" },
-  private_url:     { short: "URL",      hex: "#fb7185" },
-  private_date:    { short: "Date",     hex: "#f59e0b" },
-  account_number:  { short: "Account",  hex: "#fbbf24" },
-  secret:          { short: "Secret",   hex: "#ef4444" },
-};
+import { LABEL_META, escape, highlightText, renderRedacted } from "./rendering.js";
 
 const LABEL_ORDER = [
   "secret",
@@ -37,6 +28,7 @@ const state = {
     queue: [],             // remaining results to reveal
     speed: 1,
     timer: null,
+    autoplayTimer: null,
   },
   // Cached live aggregate (updated incrementally each time a result is added).
   aggregates: null,
@@ -44,6 +36,7 @@ const state = {
   notify: false,
   // Flipped while the detail drawer is open, so we never pile toasts over it.
   drawerOpen: false,
+  drawerTrigger: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -78,7 +71,7 @@ async function loadAll() {
     }
   } else {
     // Autoplay the simulation shortly after page load so the user sees it breathe.
-    setTimeout(() => simPlay(), 600);
+    state.sim.autoplayTimer = setTimeout(() => simPlay(), 600);
   }
 }
 
@@ -340,7 +333,14 @@ function attachRowHandlers(root) {
     ? [root]
     : root.querySelectorAll(".email-row");
   rows.forEach((el) => {
-    el.addEventListener("click", () => openDrawer(el.dataset.id));
+    el.addEventListener("click", () => openDrawer(el.dataset.id, el));
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openDrawer(el.dataset.id, el);
+      }
+    });
   });
 }
 
@@ -362,7 +362,7 @@ function emailRowHtml(r, live) {
   const leakCls = isLeak ? " row-leak" : "";
   const scanline = live ? `<div class="scanline"></div>` : "";
   return `
-    <div class="email-row${liveCls}${leakCls}" data-id="${e.id}">
+    <div class="email-row${liveCls}${leakCls}" data-id="${escape(e.id)}" role="button" tabindex="0" aria-haspopup="dialog">
       ${scanline}
       <div class="dir-icon ${dir}" title="${dir}">${dirIcon}</div>
       <div class="email-addr">
@@ -413,19 +413,15 @@ function domainOf(address) {
   return at >= 0 ? address.slice(at + 1) : "";
 }
 
-function escape(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 // ---------- Simulation engine ----------
 
 function resetDisplay() {
   state.results = [];
   state.aggregates = emptyAggregates();
+  document.querySelectorAll(".kpi .value").forEach((el) => {
+    cancelNumberAnimation(el);
+    el.textContent = "0";
+  });
   renderKpis(emptyAggregates(), state.aggregates);
   renderLabelBars(state.aggregates);
   renderSplitChart(state.aggregates);
@@ -444,6 +440,8 @@ function shuffled(arr) {
 }
 
 function simPlay() {
+  clearTimeout(state.sim.autoplayTimer);
+  state.sim.autoplayTimer = null;
   if (state.sim.mode === "running") return;
   if (state.sim.mode === "idle" || state.sim.mode === "done") {
     // Fresh start.
@@ -514,6 +512,8 @@ function revealResult(r) {
 }
 
 function loadAllInstant() {
+  clearTimeout(state.sim.autoplayTimer);
+  state.sim.autoplayTimer = null;
   if (state.sim.timer) { clearTimeout(state.sim.timer); state.sim.timer = null; }
   state.sim.mode = "done";
   state.sim.queue = [];
@@ -618,9 +618,15 @@ function dismissToast(el) {
 
 // ---------- Number tick animation ----------
 
-function animateNumber(el, from, to, duration) {
+function cancelNumberAnimation(el) {
   if (el.__rafCancel) cancelAnimationFrame(el.__rafCancel);
   if (el.__fallback) clearTimeout(el.__fallback);
+  el.__rafCancel = null;
+  el.__fallback = null;
+}
+
+function animateNumber(el, from, to, duration) {
+  cancelNumberAnimation(el);
   if (!Number.isFinite(from)) from = to;
   el.textContent = from;
   const t0 = performance.now();
@@ -648,10 +654,11 @@ function animateNumber(el, from, to, duration) {
 
 // ---------- Drawer ----------
 
-function openDrawer(id) {
+function openDrawer(id, trigger = document.activeElement) {
   // Try current results first; fall back to allResults so deep links work before simulation finishes.
   const r = state.results.find((x) => x.email.id === id) || state.allResults.find((x) => x.email.id === id);
   if (!r) return;
+  if (!state.drawerOpen) state.drawerTrigger = trigger;
   state.drawerOpen = true;
   document.body.classList.add("drawer-open");
   // Dismiss any toasts already in flight so nothing lingers over the inspection view.
@@ -659,15 +666,26 @@ function openDrawer(id) {
   const drawer = $("#drawer");
   const backdrop = $("#drawerBackdrop");
   drawer.setAttribute("aria-hidden", "false");
+  drawer.inert = false;
+  document.querySelector("main").inert = true;
+  document.querySelector(".topbar").inert = true;
   backdrop.hidden = false;
   renderDrawer(r);
+  $("#drawerClose").focus({ preventScroll: true });
 }
 
 function closeDrawer() {
+  if (!state.drawerOpen) return;
   state.drawerOpen = false;
   document.body.classList.remove("drawer-open");
+  document.querySelector("main").inert = false;
+  document.querySelector(".topbar").inert = false;
+  const trigger = state.drawerTrigger;
+  (trigger?.isConnected && trigger !== document.body ? trigger : $("#loadAllBtn")).focus({ preventScroll: true });
+  $("#drawer").inert = true;
   $("#drawer").setAttribute("aria-hidden", "true");
   $("#drawerBackdrop").hidden = true;
+  state.drawerTrigger = null;
 }
 
 function renderDrawer(r) {
@@ -719,8 +737,8 @@ function renderDrawer(r) {
     <div class="toggle-row" style="justify-content:space-between;margin-top:18px">
       <div class="drawer-section-title" style="margin:0">Body</div>
       <div class="segmented" id="viewToggle" data-view="highlighted">
-        <button data-mode="highlighted" class="active">Highlighted</button>
-        <button data-mode="redacted">Redacted</button>
+        <button data-mode="highlighted" class="active" aria-pressed="true">Highlighted</button>
+        <button data-mode="redacted" aria-pressed="false">Redacted</button>
       </div>
     </div>
 
@@ -736,11 +754,12 @@ function renderDrawer(r) {
   toggle.querySelectorAll("button").forEach((b) => {
     b.addEventListener("click", () => {
       toggle.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+      toggle.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       b.classList.add("active");
       const mode = b.dataset.mode;
       const box = $("#bodyBox");
       if (mode === "redacted") {
-        box.innerHTML = renderRedacted(e.body, r.scan.body.detected_spans);
+        box.innerHTML = renderRedacted(r.scan.body.redacted_text);
       } else {
         box.innerHTML = highlightText(e.body, r.scan.body.detected_spans);
       }
@@ -771,52 +790,6 @@ function internalTag(addr) {
     return ` <span class="badge internal" style="font-size:9.5px;padding:1px 6px;margin-left:4px">internal</span>`;
   }
   return ` <span class="badge external" style="font-size:9.5px;padding:1px 6px;margin-left:4px">external</span>`;
-}
-
-function highlightText(text, spans) {
-  if (!spans || spans.length === 0) return escape(text);
-  const sorted = [...spans].sort((a, b) => a.start - b.start);
-  const pruned = [];
-  let lastEnd = -1;
-  for (const s of sorted) {
-    if (s.start >= lastEnd) {
-      pruned.push(s);
-      lastEnd = s.end;
-    }
-  }
-  let out = "";
-  let cursor = 0;
-  for (const s of pruned) {
-    out += escape(text.slice(cursor, s.start));
-    const m = LABEL_META[s.label];
-    out += `<span class="span-hl" data-label="${s.label}" style="color:${m?.hex || '#fff'}">${escape(text.slice(s.start, s.end))}<span class="hl-tag">${m?.short || s.label}</span></span>`;
-    cursor = s.end;
-  }
-  out += escape(text.slice(cursor));
-  return out;
-}
-
-function renderRedacted(text, spans) {
-  if (!spans || spans.length === 0) return escape(text);
-  const sorted = [...spans].sort((a, b) => a.start - b.start);
-  const pruned = [];
-  let lastEnd = -1;
-  for (const s of sorted) {
-    if (s.start >= lastEnd) {
-      pruned.push(s);
-      lastEnd = s.end;
-    }
-  }
-  let out = "";
-  let cursor = 0;
-  for (const s of pruned) {
-    out += escape(text.slice(cursor, s.start));
-    const m = LABEL_META[s.label];
-    out += `<span class="redacted-tok" style="color:${m?.hex || '#fff'}">${escape(s.placeholder || "[REDACTED]")}</span>`;
-    cursor = s.end;
-  }
-  out += escape(text.slice(cursor));
-  return out;
 }
 
 // ---------- Wire up controls ----------
@@ -866,7 +839,24 @@ function updateNotifyToggle() {
 $("#drawerClose").addEventListener("click", closeDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeDrawer();
+  if (state.drawerOpen) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeDrawer();
+    } else if (e.key === "Tab") {
+      const buttons = $("#drawer").querySelectorAll("button:not([disabled])");
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    return;
+  }
   if (e.key === " " && !e.target.matches("input, textarea, button")) {
     e.preventDefault();
     if (state.sim.mode === "running") simPause();

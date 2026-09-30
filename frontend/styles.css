@@ -360,6 +360,10 @@ a:hover { border-bottom-color: var(--cyan); }
   transition: background 0.12s ease;
 }
 .email-row:hover { background: var(--bg-panel-hover); }
+.email-row:focus-visible, button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
 
 .dir-icon {
   width: 24px; height: 24px;
