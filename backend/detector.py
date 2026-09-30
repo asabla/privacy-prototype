@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from importlib import import_module
 from threading import Lock
 from typing import Any
 
@@ -84,13 +85,17 @@ class Detector:
         self.engine = "heuristic"
         self.engine_detail = "Regex heuristic (demo mode)"
         try:
-            from opf._api import OPF  # type: ignore[import-not-found]
+            import_module("opf")
+        except ModuleNotFoundError as exc:
+            if exc.name != "opf":
+                raise
+            return
 
-            self._opf = OPF(device=os.environ.get("OPF_DEVICE", "cpu"))
-            self.engine = "opf"
-            self.engine_detail = "OpenAI Privacy Filter (opf)"
-        except Exception as exc:  # ModuleNotFound or model-load failures
-            self._load_error = str(exc)
+        from opf._api import OPF  # type: ignore[import-not-found]
+
+        self._opf = OPF(device=os.environ.get("OPF_DEVICE", "cpu"))
+        self.engine = "opf"
+        self.engine_detail = "OpenAI Privacy Filter (opf)"
 
     def detect(self, text: str) -> DetectionResult:
         if self._opf is not None:

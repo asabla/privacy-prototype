@@ -100,6 +100,7 @@ def test_opf_lazy_runtime_and_inference_are_serialized(monkeypatch):
             })
 
     monkeypatch.delenv("OPF_DEVICE", raising=False)
+    monkeypatch.setitem(sys.modules, "opf", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "opf._api", SimpleNamespace(OPF=FakeOPF))
     detector = Detector()
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -112,11 +113,28 @@ def test_opf_lazy_runtime_and_inference_are_serialized(monkeypatch):
 def test_opf_device_can_be_selected(monkeypatch):
     devices = []
     monkeypatch.setenv("OPF_DEVICE", "cuda")
+    monkeypatch.setitem(sys.modules, "opf", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "opf._api", SimpleNamespace(
         OPF=lambda **kwargs: devices.append(kwargs["device"]) or object()
     ))
     assert Detector().engine == "opf"
     assert devices == ["cuda"]
+
+
+def test_broken_opf_does_not_silently_select_heuristics(monkeypatch):
+    def broken_opf(**kwargs):
+        raise RuntimeError("Invalid OPF configuration")
+
+    monkeypatch.setitem(sys.modules, "opf", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "opf._api", SimpleNamespace(OPF=broken_opf))
+    with pytest.raises(RuntimeError, match="Invalid OPF configuration"):
+        Detector()
+
+
+def test_installed_opf_missing_its_api_does_not_select_heuristics(monkeypatch):
+    monkeypatch.setitem(sys.modules, "opf", SimpleNamespace())
+    with pytest.raises(ModuleNotFoundError):
+        Detector()
 
 
 def test_opf_overlaps_use_the_same_safe_redaction_contract(monkeypatch):
@@ -129,6 +147,7 @@ def test_opf_overlaps_use_the_same_safe_redaction_contract(monkeypatch):
         "detected_spans": [span.to_dict() for span in spans],
         "redacted_text": "upstream rendering must not bypass normalization",
     }))
+    monkeypatch.setitem(sys.modules, "opf", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "opf._api", SimpleNamespace(OPF=lambda **_: fake_opf))
     result = Detector().detect(text)
     assert result.engine == "opf"

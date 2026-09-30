@@ -9,14 +9,14 @@ const body = "😀 alice@example.com 👩🏽‍💻";
 const redactedBody = "😀 [PRIVATE_EMAIL] 👩🏽‍💻";
 const emailSpan = { label: "private_email", start: 2, end: 19, text: "alice@example.com", placeholder: "[PRIVATE_EMAIL]" };
 const results = ["first", "second"].map((id) => ({
-  email: { id, direction: "outbound", sender: "employee@northwind.io", recipients: ["recipient@example.com"], subject: `Message ${id}`, body, timestamp: "2026-01-01T12:00:00Z" },
+  email: { id, direction: "outbound", sender: "employee@northwind.io", recipients: ["recipient@example.com"], subject: body, body, timestamp: "2026-01-01T12:00:00Z" },
   classification: { fully_internal: false, sender_internal: true, any_recipient_internal: false, all_recipients_internal: false, crosses_boundary: true, external_domains: ["example.com"] },
   employees_referenced: [],
-  scan: { is_sensitive: true, span_count: 1, by_label: { private_email: 1 }, subject: { detected_spans: [] }, body: { detected_spans: [emailSpan], redacted_text: redactedBody } },
+  scan: { is_sensitive: true, span_count: 2, by_label: { private_email: 2 }, subject: { detected_spans: [emailSpan], redacted_text: redactedBody }, body: { detected_spans: [emailSpan], redacted_text: redactedBody } },
 }));
 
 let instance = 0;
-async function dashboard(t) {
+async function dashboard(t, { fetchImpl, loaded = true } = {}) {
   const html = await readFile(new URL("../frontend/index.html", import.meta.url), "utf8");
   const dom = new JSDOM(html, { url: "http://localhost/" });
   const document = dom.window.document;
@@ -30,11 +30,11 @@ async function dashboard(t) {
   };
   const globals = {
     document, Element: dom.window.Element, location: dom.window.location,
-    fetch: async (url) => ({ json: async () => ({
+    fetch: fetchImpl || (async (url) => ({ ok: true, json: async () => ({
       "/api/engine": { engine: "heuristic", detail: "Test detector" },
       "/api/config": { internal_domains: ["northwind.io"] },
       "/api/scan-all": { results },
-    })[url] }),
+    })[url] })),
     performance: { now: () => now },
     setTimeout: schedule,
     clearTimeout: (id) => timers.delete(id),
@@ -54,7 +54,7 @@ async function dashboard(t) {
   });
   await import(`../frontend/app.js?test=${++instance}`);
   await setImmediate();
-  assert.equal(document.querySelector("#engineLabel").textContent, "Heuristic demo engine");
+  if (loaded) assert.equal(document.querySelector("#engineLabel").textContent, "Heuristic demo engine");
   return {
     document,
     click: (selector) => document.querySelector(selector).click(),
@@ -137,6 +137,7 @@ test("keyboard inspection traps focus, shows canonical redaction, and restores f
   assert.equal(document.activeElement, close);
   redacted.click();
   assert.equal(document.querySelector("#bodyBox").textContent, redactedBody);
+  assert.equal(document.querySelector("#subjectBox").textContent, redactedBody);
   assert.equal(redacted.getAttribute("aria-pressed"), "true");
   ui.key(redacted, "Escape");
   assert.equal(drawer.getAttribute("aria-hidden"), "true");
@@ -146,4 +147,39 @@ test("keyboard inspection traps focus, shows canonical redaction, and restores f
   ui.key(row, " ");
   assert.equal(drawer.getAttribute("aria-hidden"), "false");
   assert.match(document.querySelector("#streamSub").textContent, /Simulation complete/);
+});
+
+test("controls and keyboard cannot start the replay before scan results arrive", async (t) => {
+  let complete;
+  const pending = new Promise((resolve) => { complete = resolve; });
+  const ui = await dashboard(t, { loaded: false, fetchImpl: () => pending });
+  assert.equal(ui.document.querySelector("#simPlay").disabled, true);
+  assert.equal(ui.document.querySelector("#loadAllBtn").disabled, true);
+  ui.key(ui.document.body, " ");
+  ui.click("#loadAllBtn");
+  ui.advance(1000);
+  assert.equal(ui.document.querySelectorAll(".email-row").length, 0);
+  complete({ ok: true, json: async () => ({ engine: "heuristic", detail: "Test detector", internal_domains: [], results }) });
+  await setImmediate();
+  assert.equal(ui.document.querySelector("#simPlay").disabled, false);
+  ui.click("#loadAllBtn");
+  assert.equal(ui.document.querySelectorAll(".email-row").length, 2);
+});
+
+test("HTTP failure shows a recoverable error instead of a working replay", async (t) => {
+  let fail = true;
+  const ui = await dashboard(t, { loaded: false, fetchImpl: async () => fail
+    ? { ok: false, status: 503, json: async () => { throw new Error("must not parse failed response"); } }
+    : { ok: true, json: async () => ({ engine: "heuristic", detail: "Test detector", internal_domains: [], results }) }
+  });
+  assert.match(ui.document.querySelector("#loadStatus").textContent, /503/);
+  assert.equal(ui.document.querySelector("#simPlay").disabled, true);
+  assert.equal(ui.document.querySelector("#retryLoad").hidden, false);
+  fail = false;
+  ui.click("#retryLoad");
+  await setImmediate();
+  assert.equal(ui.document.querySelector("#simPlay").disabled, false);
+  assert.equal(ui.document.querySelector("#loadStatus").hidden, true);
+  ui.click("#loadAllBtn");
+  assert.equal(ui.document.querySelectorAll(".email-row").length, 2);
 });
