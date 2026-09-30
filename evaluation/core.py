@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
+import re
 
 from backend.detector import LABELS, DetectionResult
 
@@ -15,6 +16,7 @@ class Case:
     id: str
     text: str
     expected: tuple[tuple[str, int, int], ...]
+    groups: tuple[str, ...] = ()
 
 
 def load_cases(path: Path) -> tuple[list[Case], str]:
@@ -40,7 +42,12 @@ def load_cases(path: Path) -> tuple[list[Case], str]:
                 raise ValueError(f"Invalid annotated segment in {case_id}")
             expected.append((label, len(text), len(text) + len(value)))
             text += value
-        cases.append(Case(case_id, text, tuple(expected)))
+        groups = item.get("groups", [])
+        if (not isinstance(groups, list) or any(not isinstance(group, str)
+                or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", group) for group in groups)
+                or len(set(groups)) != len(groups)):
+            raise ValueError(f"Invalid evaluation groups in {case_id}")
+        cases.append(Case(case_id, text, tuple(expected), tuple(groups)))
     return cases, sha256(raw).hexdigest()
 
 
@@ -99,7 +106,7 @@ def evaluate(cases: list[Case], detector, dataset_digest: str) -> dict:
     counts = ("true_positives", "false_positives", "false_negatives")
     sensitive = sum(row["sensitive_characters"] for row in scores)
     uncovered = sum(row["unredacted_sensitive_characters"] for row in scores)
-    return {
+    report = {
         "schema_version": 1,
         "engine": detector.engine,
         "dataset_sha256": dataset_digest,
@@ -117,6 +124,18 @@ def evaluate(cases: list[Case], detector, dataset_digest: str) -> dict:
         },
         "cases": [{k: v for k, v in row.items() if k != "by_label"} for row in scores],
     }
+    # A case can belong to multiple slices. Slice counts must not be added together.
+    report["groups"] = {}
+    for group in sorted({group for case in cases for group in case.groups}):
+        rows = [score for case, score in zip(cases, scores) if group in case.groups]
+        report["groups"][group] = {
+            "case_count": len(rows),
+            "exact_spans": metrics(*(sum(row[key] for row in rows) for key in counts)),
+            "sensitive_characters": sum(row["sensitive_characters"] for row in rows),
+            "unredacted_sensitive_characters": sum(row["unredacted_sensitive_characters"] for row in rows),
+            "extra_redacted_characters": sum(row["extra_redacted_characters"] for row in rows),
+        }
+    return report
 
 
 ERROR_COUNTS = ("false_positives", "false_negatives", "unredacted_sensitive_characters", "extra_redacted_characters")

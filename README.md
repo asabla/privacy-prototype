@@ -189,6 +189,7 @@ backend's `redacted_text` when redaction is selected.
 
 ```bash
 make eval                              # heuristic report and baseline regression gate
+make eval-extended                     # additional language, format and negative cases
 make eval EVAL_ARGS='--output /tmp/heuristic-report.json'
 make eval-opf EVAL_ARGS='--output /tmp/opf-report.json'
 make test-opf                          # real model through the API, including the full corpus
@@ -222,6 +223,14 @@ A changed dataset fingerprint or engine requires an explicit baseline review.
 To propose a new baseline, generate a report with `python -m evaluation.run --engine
 heuristic --output /tmp/proposed-baseline.json`, inspect every change, and only then
 replace the committed baseline. Do not update the baseline just to make CI pass.
+
+The separate 28-case `evaluation/extended-cases.json` adds Swedish names and
+addresses, forwarded text, multiline credentials, combining characters and
+misleading negatives. It has its own reviewed heuristic baseline; the original
+21-case baseline is unchanged. Optional `groups` produce overlapping report slices
+whose counts must not be added together. Both datasets are checked in regular CI.
+See [expanded evaluation](docs/expanded-evaluation.md) for the measured real-model
+misses, annotation decisions, policy coverage and reproduction commands.
 
 The OPF commands use a separate `.venv-opf` environment and do not change the saved
 engine selection for the dashboard. Override its location with `OPF_TEST_ENV`.

@@ -22,7 +22,7 @@ from backend.corpus import INTERNAL_DOMAINS
 from backend.detector import LABELS, Detector, HEURISTIC_PATTERNS, Span, _apply_redaction, _merge_overlapping_spans
 from backend.security import MAX_BODY_BYTES, MAX_TEXT_CHARS
 
-POLICY_VERSION = "2026-09-30.2"
+POLICY_VERSION = "2026-09-30.3"
 RECEIPT_TTL_SECONDS = 600
 MAX_PENDING_REVIEWS = 256
 MAX_FINDINGS = 512
@@ -73,7 +73,7 @@ class RoutingSummary(Contract):
 
 class Candidate(Contract):
     use_case: UseCase
-    policy_version: Literal["2026-09-30.2"] = POLICY_VERSION
+    policy_version: Literal["2026-09-30.3"] = POLICY_VERSION
     engine: Literal["heuristic", "opf"]
     fields: dict[FieldName, CandidateValue] = Field(max_length=4)
     routing: RoutingSummary | None = None
@@ -134,11 +134,34 @@ _CREDENTIAL_SHAPE = next(pattern for label, pattern in HEURISTIC_PATTERNS if lab
 _CREDENTIAL_ASSIGNMENT = re.compile(
     r"(?i)(?<!\w)(?P<key_quote>[\"']?)(?:api[_-]?key|access[_-]?token|token|password|passwd|secret)"
     r"(?P=key_quote)\s*[:=]\s*"
-    # Consume escaped quotes and unterminated quoted values through the line end.
+    # Prefer closed values across lines, then fall back to an unfinished line.
+    r'''(?:"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|'''
     r'''(?:"(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^"\\\r\n])*(?:"|(?=\r?\n|$))'''
-    r'''|'(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^'\\\r\n])*(?:'|(?=\r?\n|$))|[^\s,;"']+)'''
+    r'''|'(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^'\\\r\n])*(?:'|(?=\r?\n|$))|[^\s,;"']+))'''
+)
+_CREDENTIAL_BLOCK = re.compile(
+    r'''(?im)^(?P<indent> *)(?P<key_quote>["']?)(?:api[_-]?key|access[_-]?token|token|password|passwd|secret)'''
+    r'''(?P=key_quote)[ \t]*:[ \t]*[|>](?:[1-9][+-]?|[+-][1-9]?)?[ \t]*(?:\#[^\r\n]*)?\r?\n'''
 )
 _PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)")
+
+
+def _credential_blocks(text: str):
+    """Cover indented literal/folded values without interpreting untrusted YAML."""
+    for match in _CREDENTIAL_BLOCK.finditer(text):
+        parent_indent = len(match["indent"])
+        cursor = end = match.end()
+        for line_match in re.finditer(r"[^\n]*(?:\n|$)", text[cursor:]):
+            line = line_match.group()
+            content = line.rstrip("\r\n")
+            if content.strip():
+                indent = len(content) - len(content.lstrip(" "))
+                if indent <= parent_indent:
+                    break
+                end = cursor + len(content)
+            cursor += len(line)
+        if end > match.end():
+            yield match.start() + parent_indent, end
 
 
 def prepare(req: PrepareRequest, detector: Detector) -> tuple[Candidate, list[dict], dict]:
@@ -168,6 +191,9 @@ def prepare(req: PrepareRequest, detector: Detector) -> tuple[Candidate, list[di
             for match in pattern.finditer(text):
                 spans.append(Span("secret", match.start(), match.end(), match.group(), ""))
                 origins.append((match.start(), match.end(), "credential_rule"))
+        for start, end in _credential_blocks(text):
+            spans.append(Span("secret", start, end, text[start:end], ""))
+            origins.append((start, end, "credential_rule"))
         for mask in req.manual_masks:
             if mask.field == field:
                 spans.append(Span("manual", mask.start, mask.end, text[mask.start:mask.end], ""))

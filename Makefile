@@ -4,7 +4,7 @@ OPF_EXTRA = $(if $(wildcard .opf-enabled),--extra opf)
 OPF_TEST_ENV ?= .venv-opf
 EVAL_ARGS ?=
 
-.PHONY: help install run serve dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js test-workbench-api test-container audit audit-python audit-js check eval eval-opf test-opf test-opf-offline
+.PHONY: help install run serve dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js test-workbench-api test-container audit audit-python audit-js check eval eval-extended eval-opf test-opf test-opf-offline
 
 help:  ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -59,6 +59,9 @@ test-container:  ## Build and verify the isolated Compose service (requires Dock
 
 eval: install  ## Score the heuristic against the reviewed synthetic baseline
 	uv run --no-sync python -m evaluation.run --engine heuristic --baseline evaluation/heuristic-baseline.json $(EVAL_ARGS)
+
+eval-extended: install  ## Score Swedish, forwarded, credential, boundary and negative cases
+	uv run --no-sync python -m evaluation.run --engine heuristic --dataset evaluation/extended-cases.json --baseline evaluation/heuristic-extended-baseline.json $(EVAL_ARGS)
 
 eval-opf:  ## Evaluate real OPF in an isolated venv (may download model weights)
 	UV_PROJECT_ENVIRONMENT="$(OPF_TEST_ENV)" uv run --locked --extra opf python -m evaluation.run --engine opf $(EVAL_ARGS)
