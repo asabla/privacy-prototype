@@ -22,11 +22,13 @@ def validate_scan(scan: dict) -> None:
         raise ValueError("Span summary does not match detector output")
 
 
-def main() -> None:
+def main(*, preload: bool = False) -> None:
     api_key = secrets.token_urlsafe(32)
-    app = create_app(Settings(api_key=api_key))
+    app = create_app(Settings(api_key=api_key, preload=preload))
     with TestClient(app, base_url="http://127.0.0.1",
                     headers={"Authorization": f"Bearer {api_key}"}) as client:
+        if preload and client.get("/ready").status_code != 200:
+            raise ValueError("Preloaded model did not become ready")
         engine = client.get("/api/engine")
         engine.raise_for_status()
         if engine.json()["engine"] != "opf":

@@ -25,7 +25,13 @@ from backend.review import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    get_detector()
+    try:
+        detector = get_detector()
+        if app.state.settings.preload:
+            detector.detect("Contact the synthetic readiness address alice@example.com.")
+    except Exception:
+        # Model/configuration exceptions can include local paths or other inputs.
+        raise RuntimeError("Detector startup failed; verify engine and model configuration") from None
     try:
         yield
     finally:
@@ -291,6 +297,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/ready")
+    def ready():
+        detector = get_detector()
+        if not detector.is_ready:
+            return error_response(503, "engine_not_ready")
+        return {"status": "ready", "engine": detector.engine}
 
     @app.get("/")
     def index() -> FileResponse:

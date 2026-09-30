@@ -85,8 +85,10 @@ controlled reverse proxy and configure Uvicorn to trust forwarding headers only
 from that proxy. Do not expose the default development server to the network.
 The existing fixture dashboard is a loopback demo and does not supply a key.
 
-`GET /health` proves the HTTP service is responding. It does not imply that OPF's
-lazy model has loaded or that inference has been tested. Raw text has no database
+`GET /health` proves the HTTP service is responding. `GET /ready` requires a
+successful nonempty inference and resets after inference failure. `make serve`
+preloads inference before accepting traffic; see [runtime operation](runtime.md).
+Raw text has no database
 or application disk persistence; Python and model memory are not securely erased
 after a request. Treat the machine as part of the sensitive-data boundary.
 

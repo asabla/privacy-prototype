@@ -79,11 +79,13 @@ class DetectionResult:
 class Detector:
     """Detects PII. Prefers real `opf` if available, falls back to heuristic."""
 
-    def __init__(self, engine: str = "auto") -> None:
+    def __init__(self, engine: str | None = None) -> None:
+        engine = engine if engine is not None else os.environ.get("SENTINEL_ENGINE", "auto")
         if engine not in {"auto", "heuristic", "opf"}:
-            raise ValueError(f"Unknown detection engine: {engine}")
+            raise ValueError("Unknown detection engine; SENTINEL_ENGINE must be auto, heuristic, or opf")
         self._opf = None
         self._inference_lock = Lock()
+        self.is_ready = False
         self.engine = "heuristic"
         self.engine_detail = "Regex heuristic (demo mode)"
         if engine == "heuristic":
@@ -104,11 +106,16 @@ class Detector:
         self.engine_detail = "OpenAI Privacy Filter (opf)"
 
     def detect(self, text: str) -> DetectionResult:
-        if self._opf is not None:
-            # OPF lazily initializes its runtime and decoder on the first scan.
-            with self._inference_lock:
-                return self._detect_opf(text)
-        return self._detect_heuristic(text)
+        # OPF lazily initializes its runtime and decoder on the first scan.
+        with self._inference_lock:
+            try:
+                result = self._detect_opf(text) if self._opf is not None else self._detect_heuristic(text)
+            except Exception:
+                self.is_ready = False
+                raise
+            if text:
+                self.is_ready = True
+            return result
 
     def _detect_opf(self, text: str) -> DetectionResult:
         raw = self._opf.redact(text).to_dict()  # type: ignore[union-attr]

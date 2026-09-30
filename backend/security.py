@@ -32,6 +32,7 @@ SECURITY_HEADERS = {
 class Settings:
     api_key: str | None = field(default=None, repr=False)
     allowed_hosts: tuple[str, ...] = LOCAL_HOSTS
+    preload: bool = False
 
     def __post_init__(self) -> None:
         if self.api_key is not None and not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", self.api_key):
@@ -47,9 +48,13 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         hosts = os.environ.get("SENTINEL_ALLOWED_HOSTS")
+        preload = os.environ.get("SENTINEL_PRELOAD", "0")
+        if preload not in {"0", "1"}:
+            raise ValueError("SENTINEL_PRELOAD must be 0 or 1")
         return cls(
             api_key=os.environ.get("SENTINEL_API_KEY"),
             allowed_hosts=tuple(h.strip() for h in hosts.split(",")) if hosts is not None else LOCAL_HOSTS,
+            preload=preload == "1",
         )
 
 

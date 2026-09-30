@@ -45,6 +45,11 @@ The authenticated [workbench](http://127.0.0.1:8000/workbench) implements these
 policies, manual masks, and one-use reviewed exports. The inbox remains a synthetic
 inspection view.
 
+For a preloaded native service or a non-root, read-only container, follow the
+[runtime guide](docs/runtime.md). `/health` checks HTTP; `/ready` requires successful
+inference. The container uses the heuristic explicitly, while the native service
+can require real OPF without silent fallback.
+
 ### Decisions needed before a real-mail pilot
 
 - Choose a retrospective review tool or an inline delivery control. An inline system
@@ -150,6 +155,8 @@ to the Makefile commands.
 make test           # Python/API/engine-workflow tests, then frontend DOM tests
 make check          # tests plus Python and npm vulnerability audits
 make test-workbench-api  # actual workbench DOM against an authenticated HTTP service
+make test-container     # build and exercise the actual restricted Compose service
+make test-opf-offline   # cached real-model preload/workflows with Python network calls denied
 ```
 
 Tests require Node.js 22.22.2, 24.15+, or 26+ in addition to Python and uv. Frontend test
@@ -167,6 +174,8 @@ and checks registry packages applicable to the current platform without installi
 the model stack. The pinned OPF Git revision itself has no PyPI advisory record and
 is excluded from that audit. `npm audit` includes frontend test dependencies.
 Audits require network access; Dependabot proposes weekly uv, npm, and Actions updates.
+It also tracks the digest-pinned Docker base images. CI builds the container and
+checks its runtime restrictions, reviewed exports, overload recovery, and restart.
 
 Scan responses declare `offset_unit: "unicode_code_points"`. Span offsets are
 zero-based, start-inclusive and end-exclusive. Both engines normalize overlapping
@@ -234,6 +243,7 @@ also describes the model's fixed label policy and context-dependent failure mode
 | `make install` | Sync locked dependencies, retaining the selected engine |
 | `make lock` | Refresh `uv.lock` |
 | `make run` | Start the dev server (auto-reload) |
+| `make serve` | Preload inference and run one process without reload |
 | `make engine` | Print the active detection engine |
 | `make scan` | Pipe stdin through the detector (`echo 'hi alice@acme.com' \| make scan`) |
 | `make install-opf` / `make uninstall-opf` | Swap the detection engine |
