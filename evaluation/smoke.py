@@ -1,11 +1,13 @@
 """Opt-in real OPF API check; fails immediately if the heuristic is selected."""
 
 import json
+import secrets
 
 from fastapi.testclient import TestClient
 
 from backend.detector import DetectionResult, Span
-from backend.main import app
+from backend.main import create_app
+from backend.security import Settings
 from evaluation.core import Case, score_case
 
 
@@ -21,13 +23,16 @@ def validate_scan(scan: dict) -> None:
 
 
 def main() -> None:
-    with TestClient(app) as client:
+    api_key = secrets.token_urlsafe(32)
+    app = create_app(Settings(api_key=api_key))
+    with TestClient(app, base_url="http://127.0.0.1",
+                    headers={"Authorization": f"Bearer {api_key}"}) as client:
         engine = client.get("/api/engine")
         engine.raise_for_status()
         if engine.json()["engine"] != "opf":
             raise RuntimeError("Real OPF is required; the heuristic cannot satisfy this check")
         sample = "😀 Please contact Alice Smith at alice.smith@gmail.com. Her date of birth is 1990-01-02."
-        response = client.post("/api/scan", json={"text": sample})
+        response = client.post("/api/scan", json={"text": sample, "include_source": True})
         response.raise_for_status()
         scanned = response.json()
         if scanned["text"] != sample:
@@ -38,7 +43,7 @@ def main() -> None:
                    and s["end"] >= address_start + len("alice.smith@gmail.com")
                    for s in scanned["detected_spans"]):
             raise ValueError("The real model did not cover the synthetic email address")
-        empty = client.post("/api/scan", json={"text": ""})
+        empty = client.post("/api/scan", json={"text": "", "include_source": True})
         empty.raise_for_status()
         validate_scan(empty.json())
 
