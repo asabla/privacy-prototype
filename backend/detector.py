@@ -79,16 +79,22 @@ class DetectionResult:
 class Detector:
     """Detects PII. Prefers real `opf` if available, falls back to heuristic."""
 
-    def __init__(self) -> None:
+    def __init__(self, engine: str = "auto") -> None:
+        if engine not in {"auto", "heuristic", "opf"}:
+            raise ValueError(f"Unknown detection engine: {engine}")
         self._opf = None
         self._inference_lock = Lock()
         self.engine = "heuristic"
         self.engine_detail = "Regex heuristic (demo mode)"
+        if engine == "heuristic":
+            return
         try:
             import_module("opf")
         except ModuleNotFoundError as exc:
             if exc.name != "opf":
                 raise
+            if engine == "opf":
+                raise RuntimeError("OPF is required but is not installed. Run make install-opf.") from exc
             return
 
         from opf._api import OPF  # type: ignore[import-not-found]

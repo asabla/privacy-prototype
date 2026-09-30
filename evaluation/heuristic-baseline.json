@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "engine": "heuristic",
+  "dataset_sha256": "33cda621064061745841f2658cac0f450db5898d168ec5cd7ce428f962e04c7e",
+  "case_count": 21,
+  "exact_spans": {
+    "true_positives": 17,
+    "false_positives": 6,
+    "false_negatives": 4,
+    "precision": 0.73913,
+    "recall": 0.809524
+  },
+  "redaction": {
+    "sensitive_characters": 343,
+    "unredacted_sensitive_characters": 36,
+    "extra_redacted_characters": 64,
+    "sensitive_character_coverage": 0.895044
+  },
+  "by_label": {
+    "private_person": {
+      "true_positives": 3,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "precision": 0.5,
+      "recall": 0.75
+    },
+    "private_email": {
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "private_phone": {
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "private_address": {
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.5
+    },
+    "private_url": {
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "private_date": {
+      "true_positives": 3,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.75,
+      "recall": 1.0
+    },
+    "account_number": {
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "secret": {
+      "true_positives": 0,
+      "false_positives": 2,
+      "false_negatives": 2,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  },
+  "cases": [
+    {
+      "id": "person-signature",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 11,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "person-unicode",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 9,
+      "unredacted_sensitive_characters": 7,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "email-unicode-prefix",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 17,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "email-repeated",
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 32,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "phone-us",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 17,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "phone-international",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 15,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "address-street",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 18,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "address-unicode",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 29,
+      "unredacted_sensitive_characters": 29,
+      "extra_redacted_characters": 19
+    },
+    {
+      "id": "url-private-document",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 39,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "url-personal-profile",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 38,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "date-iso",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 10,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "date-slash",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 10,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "account-ssn",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 11,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "account-routing",
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 12,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "secret-assignment",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "sensitive_characters": 13,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 9
+    },
+    {
+      "id": "secret-after-signature",
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "sensitive_characters": 24,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 9
+    },
+    {
+      "id": "mixed-sensitive",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "sensitive_characters": 38,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "negative-empty",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": null,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "negative-plain",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": null,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 0
+    },
+    {
+      "id": "negative-title",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.0,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 17
+    },
+    {
+      "id": "negative-public-date",
+      "true_positives": 0,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.0,
+      "recall": null,
+      "sensitive_characters": 0,
+      "unredacted_sensitive_characters": 0,
+      "extra_redacted_characters": 10
+    }
+  ],
+  "baseline_failures": []
+}

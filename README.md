@@ -29,9 +29,9 @@ localhost and use synthetic input: it has no authentication or request quotas.
   needs an explicit allow, block, or defer policy when detection fails.
 - Define which labels and recipient relationships require review, along with trusted
   domains, exceptions, and who can make those decisions. PII presence alone is not a policy.
-- Establish labeled evaluation data with expected spans, including supported languages,
-  Unicode, forwarded mail, and attachments. Current tests establish code behavior, not
-  detector recall or precision.
+- Extend the synthetic evaluation fixtures into representative labeled data for the
+  intended languages, forwarded mail, and attachments. The small regression dataset
+  does not establish accuracy for real email.
 - Define access control, raw-text retention, audit history, request limits, and deployment
   ownership before accepting real email. Model inference is serialized within one
   process; throughput and concurrent request behavior need a separate workload test.
@@ -133,6 +133,59 @@ matches into disjoint spans covering every matched character, with secrets takin
 label precedence. The UI highlights using this offset contract and displays the
 backend's `redacted_text` when redaction is selected.
 
+## Detector evaluation
+
+```bash
+make eval                              # heuristic report and baseline regression gate
+make eval EVAL_ARGS='--output /tmp/heuristic-report.json'
+make eval-opf EVAL_ARGS='--output /tmp/opf-report.json'
+make test-opf                          # real model through the API, including the full corpus
+```
+
+The 21 hand-labelled examples in `evaluation/cases.json` cover all eight labels,
+repeated values, Unicode, mixed content, and negative cases. String segments are
+unlabelled; `{ "label": "private_email", "text": "alice@example.com" }` marks an
+expected sensitive span. Offsets are derived from the annotated segments using
+Unicode code points, not inferred from detector output. Password annotations cover
+the value, not the field name; public release dates are negative examples under
+this fixture's convention. Synthetic password values remain positive annotations
+even when a model might recognize them as examples.
+
+Reports contain case IDs and counts, not message text or detected values:
+
+- **Exact span precision and recall:** a match requires the same label, start, and end.
+  A partial or mislabelled detection contributes a false positive and a false negative.
+- **Sensitive character coverage:** the proportion of annotated characters covered
+  by any detected span, independent of its label. Uncovered characters remain exposed.
+- **Extra redacted characters:** characters masked outside the annotated sensitive spans.
+  This distinguishes masking everything from accurate detection.
+
+Undefined ratios are `null`, not a perfect score. Invalid offsets, mismatched text,
+or redacted output inconsistent with the spans fail evaluation.
+
+`evaluation/heuristic-baseline.json` records current behavior, including known misses.
+CI rejects an increase in false positives, false negatives, uncovered sensitive
+characters, or extra redaction in any individual case. Improvements are allowed.
+A changed dataset fingerprint or engine requires an explicit baseline review.
+To propose a new baseline, generate a report with `python -m evaluation.run --engine
+heuristic --output /tmp/proposed-baseline.json`, inspect every change, and only then
+replace the committed baseline. Do not update the baseline just to make CI pass.
+
+The OPF commands use a separate `.venv-opf` environment and do not change the saved
+engine selection for the dashboard. Override its location with `OPF_TEST_ENV`.
+They may download dependencies and weights; set `OPF_CHECKPOINT` to a fixed local
+checkpoint and `OPF_DEVICE=cpu` when comparing runs. They require the real engine:
+missing OPF cannot silently satisfy the check with heuristics. Regular CI stays
+offline with respect to the model; the real-model commands are opt-in local checks.
+
+The smoke check verifies API execution, source text, Unicode offsets, redaction
+consistency, empty input, and every synthetic corpus message. It is not an accuracy
+gate. On this small authored fixture, both engines still leave some labelled
+characters visible. Expand and review the annotation policy before treating these
+scores as evidence for a real-mail pilot. The upstream
+[model card](https://huggingface.co/openai/privacy-filter#bias-risks-and-limitations)
+also describes the model's fixed label policy and context-dependent failure modes.
+
 ## Handy targets
 
 | Target | What it does |
@@ -145,6 +198,8 @@ backend's `redacted_text` when redaction is selected.
 | `make install-opf` / `make uninstall-opf` | Swap the detection engine |
 | `make test` | Run backend, API, engine-switching, and frontend regression tests |
 | `make check` / `make audit` | Tests plus audits / dependency audits only |
+| `make eval` / `make eval-opf` | Score synthetic annotations with the heuristic / real OPF |
+| `make test-opf` | Opt-in real OPF API check in a separate virtual environment |
 | `make clean` | Purge `__pycache__` and `.pyc` |
 | `make reset` | `clean` + wipe `.venv`, legacy `.opf-src`, and engine selection |
 
