@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import re
 import secrets
 import time
 from collections import Counter, deque
@@ -19,10 +18,11 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 from backend.corpus import INTERNAL_DOMAINS
-from backend.detector import LABELS, Detector, HEURISTIC_PATTERNS, Span, _apply_redaction, _merge_overlapping_spans
+from backend.credentials import credential_ranges
+from backend.detector import LABELS, Detector, Span, _apply_redaction, _merge_overlapping_spans
 from backend.security import MAX_BODY_BYTES, MAX_TEXT_CHARS
 
-POLICY_VERSION = "2026-09-30.3"
+POLICY_VERSION = "2026-09-30.4"
 RECEIPT_TTL_SECONDS = 600
 MAX_PENDING_REVIEWS = 256
 MAX_FINDINGS = 512
@@ -73,7 +73,7 @@ class RoutingSummary(Contract):
 
 class Candidate(Contract):
     use_case: UseCase
-    policy_version: Literal["2026-09-30.3"] = POLICY_VERSION
+    policy_version: Literal["2026-09-30.4"] = POLICY_VERSION
     engine: Literal["heuristic", "opf"]
     fields: dict[FieldName, CandidateValue] = Field(max_length=4)
     routing: RoutingSummary | None = None
@@ -128,42 +128,6 @@ def _routing(fields: dict[str, str]) -> RoutingSummary:
                           all_recipients_internal=all(internal))
 
 
-# Supplement model output with deterministic credential rules, including short and
-# quoted assignments. These are policy safeguards, separate from model evaluation.
-_CREDENTIAL_SHAPE = next(pattern for label, pattern in HEURISTIC_PATTERNS if label == "secret")
-_CREDENTIAL_ASSIGNMENT = re.compile(
-    r"(?i)(?<!\w)(?P<key_quote>[\"']?)(?:api[_-]?key|access[_-]?token|token|password|passwd|secret)"
-    r"(?P=key_quote)\s*[:=]\s*"
-    # Prefer closed values across lines, then fall back to an unfinished line.
-    r'''(?:"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|'''
-    r'''(?:"(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^"\\\r\n])*(?:"|(?=\r?\n|$))'''
-    r'''|'(?:\\(?:[^\r\n]|(?=\r?\n|$))|[^'\\\r\n])*(?:'|(?=\r?\n|$))|[^\s,;"']+))'''
-)
-_CREDENTIAL_BLOCK = re.compile(
-    r'''(?im)^(?P<indent> *)(?P<key_quote>["']?)(?:api[_-]?key|access[_-]?token|token|password|passwd|secret)'''
-    r'''(?P=key_quote)[ \t]*:[ \t]*[|>](?:[1-9][+-]?|[+-][1-9]?)?[ \t]*(?:\#[^\r\n]*)?\r?\n'''
-)
-_PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)")
-
-
-def _credential_blocks(text: str):
-    """Cover indented literal/folded values without interpreting untrusted YAML."""
-    for match in _CREDENTIAL_BLOCK.finditer(text):
-        parent_indent = len(match["indent"])
-        cursor = end = match.end()
-        for line_match in re.finditer(r"[^\n]*(?:\n|$)", text[cursor:]):
-            line = line_match.group()
-            content = line.rstrip("\r\n")
-            if content.strip():
-                indent = len(content) - len(content.lstrip(" "))
-                if indent <= parent_indent:
-                    break
-                end = cursor + len(content)
-            cursor += len(line)
-        if end > match.end():
-            yield match.start() + parent_indent, end
-
-
 def prepare(req: PrepareRequest, detector: Detector) -> tuple[Candidate, list[dict], dict]:
     routing = _routing(req.fields) if req.use_case == "email" else None
     output: dict[str, str] = {}
@@ -187,11 +151,7 @@ def prepare(req: PrepareRequest, detector: Detector) -> tuple[Candidate, list[di
         if any(s.label not in LABELS or text[s.start:s.end] != s.text for s in spans):
             raise ReviewError(503, "invalid_detector_result")
         origins = [(s.start, s.end, "detector") for s in spans]
-        for pattern in (_CREDENTIAL_SHAPE, _CREDENTIAL_ASSIGNMENT, _PRIVATE_KEY):
-            for match in pattern.finditer(text):
-                spans.append(Span("secret", match.start(), match.end(), match.group(), ""))
-                origins.append((match.start(), match.end(), "credential_rule"))
-        for start, end in _credential_blocks(text):
+        for start, end in credential_ranges(text):
             spans.append(Span("secret", start, end, text[start:end], ""))
             origins.append((start, end, "credential_rule"))
         for mask in req.manual_masks:

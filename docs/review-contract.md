@@ -6,7 +6,7 @@ They can also be exercised from a client with the
 
 ## Use cases and policy
 
-| Use case | Required fields | Policy `2026-09-30.3` |
+| Use case | Required fields | Policy `2026-09-30.4` |
 | --- | --- | --- |
 | `support_ticket` | `text` | Mask all detector findings, credential rules, and manual ranges before sharing a ticket |
 | `ai_prompt` | `text` | Apply the same masks with consistent repeated-value placeholders within this request; never call an external AI provider |
@@ -19,17 +19,36 @@ approved policy. Email routing accepts one sender and up to 20 recipients in
 comma-separated mailbox notation. Header newlines and invalid mailboxes fail.
 
 Credential rules supplement either detector with credential-shaped values, short
-or quoted password/token assignments, and private-key blocks. Policy `2026-09-30.3`
+or quoted password/token assignments, and private-key blocks. Policy `2026-09-30.4`
 covers quoted JSON/YAML keys, escaped quotes, closed multiline quoted values and
 indented YAML literal/folded blocks. Unfinished quoted values are covered through
 their first line; malformed or other credential formats still require review.
 Block coverage stops at the next nonblank line at the key's indentation or less.
+It also handles blocks inside forwarded `>` quotations, including nested quotation
+levels. Leaving that quotation ends the block. LF, CRLF and CR line breaks preserve
+the original Unicode offsets.
+
+Copied HTTP `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` lines
+are masked in full, including scheme, cookie attributes and indented continuation
+lines. Header names are case-insensitive and must occupy the start of a line after
+optional indentation or `>` quoting. A blank line ends a header's continuation;
+ordinary headers and the following troubleshooting text remain available for review.
+This intentionally removes every cookie value, including non-secret preferences:
+the reference does not attempt to decide which cookie grants access. An empty
+header with no indented continuation is left unchanged.
+
+These safeguards apply to pasted text, not to the service's actual HTTP headers.
+They are not a general HTTP, JSON or shell parser; arbitrarily embedded, encoded or
+obfuscated credentials still require whole-message review. See the
+[support-log walkthrough](support-log-review.md) for the tested format and output.
 The output is reviewed plain text and does not
 promise valid JSON/YAML syntax after assignment redaction. These rules address
 known fixture misses; they are not a complete secrets scanner. Model-only metrics
 from `make eval` remain separate so policy safeguards cannot hide model misses.
-Seventeen annotated cases in `evaluation/credential-cases.json` check policy coverage
-independently of model findings, including negative reset/description examples.
+Forty-one annotated cases across `evaluation/credential-cases.json` and
+`evaluation/support-log-cases.json` check coverage independently of model findings,
+including negative field names and descriptions. API regressions exercise header
+and forwarded-block redaction through export in all three workflows.
 
 Repeated identical values with the same label receive the same numbered placeholder
 within one request, including across an email's subject and body. Numbering resets

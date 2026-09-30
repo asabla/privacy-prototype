@@ -103,6 +103,13 @@ statements for implementation.
   preload/corpus/workflows. Browser downloads verify the fix and screenshots show
   the current policy. The threat model and requirement-by-requirement evidence are
   in `docs/threat-model.md` and `docs/acceptance.md`.
-- The final delivery gate is four green CI jobs for this package, its reviewed
-  merge, and verification from a clean main checkout. R1–R11 are mapped to evidence
-  in the acceptance record; residual detector and deployment limits remain explicit.
+- PR #8 completed the initial acceptance package after four green CI jobs. PR #9
+  added 28 evaluation cases and multiline credential policy coverage. PR #10 added
+  the real CPU OPF container, pinned read-only model assets, an offline startup gate,
+  the support-ticket walkthrough and a connection-race fix. All five PR checks and
+  the merged-main checks passed. R1–R11 remain mapped in the acceptance record.
+- Policy `2026-09-30.4` covers copied HTTP authentication/cookie headers and forwarded
+  credential blocks. Local evidence: 173 Python tests, 21 UI tests, three HTTP
+  workflows, clean dependency audits, 19 real offline OPF policy exports, the real
+  OPF container gate and an exact-download Browser walkthrough. Delivery requires
+  all five CI jobs to pass on the revision being merged.

@@ -98,7 +98,8 @@ def main():
         status, body, _ = request("/api/scan", {"text": {sentinel: sentinel}})
         assert status == 422 and sentinel not in body
         workflows = [
-            ("support_ticket", {"text": 'Contact alice@example.com; password="example first\nexample second"'}),
+            ("support_ticket", {"text": 'Contact alice@example.com\nAuthorization: Bearer example header\n'
+                '> password: |\n>   example first\n>   example second\n> Public context: investigate error 404.'}),
             ("ai_prompt", {"text": "Summarize alice@example.com; token=demo"}),
             ("email", {"sender": "alice@northwind.io", "recipients": "bob@example.com",
                        "subject": "Help for alice@example.com", "body": "password=demo"}),
@@ -108,7 +109,9 @@ def main():
             assert status == 200 and headers["cache-control"] == "no-store"
             prepared = json.loads(body)
             assert prepared["candidate"]["engine"] == engine
-            assert all(value not in body for value in ("alice@example.com", "=demo", "example first", "example second"))
+            assert all(value not in body for value in ("alice@example.com", "=demo", "example header", "example first", "example second"))
+            if use_case == "support_ticket":
+                assert "Public context: investigate error 404." in prepared["candidate"]["fields"]["text"]
             payload = {"receipt": prepared["review"]["receipt"], "candidate": prepared["candidate"], "confirmed": True}
             status, body, _ = request("/api/review/export", payload)
             assert status == 200 and json.loads(body)["candidate"] == payload["candidate"]
@@ -137,7 +140,7 @@ def main():
         assert request("/api/review/export", {"receipt": pending["review"]["receipt"],
             "candidate": pending["candidate"], "confirmed": True})[0] == 410
         logs = run(*compose, "logs", "--no-color")
-        assert all(value not in logs for value in (key, sentinel, "alice@example.com", "password=demo", "example first"))
+        assert all(value not in logs for value in (key, sentinel, "alice@example.com", "password=demo", "example first", "example header"))
         print(json.dumps({"status": "passed", "engine": engine, "review_workflows": 3,
                           "burst_statuses": statuses, "restart_receipt_rejected": True,
                           "non_root": True, "read_only": True, "external_connection_blocked": True}))

@@ -19,6 +19,9 @@ previous results; downloads must match the exact candidate approved. Clear remov
 input, results, manual masks, and the key from the tab. The server keeps only keyed
 fingerprints and bounded metadata between review requests, with no raw-text database.
 See the [guided showcase](docs/showcase.md) and [review API contract](docs/review-contract.md).
+The [support-log walkthrough](docs/support-log-review.md) demonstrates removing
+copied authentication headers, cookies and forwarded credentials while keeping the
+issue and reproduction context.
 
 The synthetic inbox at `/` lets a developer or privacy reviewer compare engines,
 inspect spans, and discuss which outbound messages deserve attention. Its

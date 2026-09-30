@@ -51,6 +51,12 @@ fields. They include escaped quotes, CRLF, blank lines, nested indentation and
 block indicators. All three API workflows test multiline review and export.
 These safeguards are deliberately excluded from the detector measurements above.
 
+Policy `2026-09-30.4` adds 24 separate support-log cases: 19 positive cases for
+HTTP authorization/cookie headers and forwarded credential blocks, plus five
+negative cases. They join the 17 existing credential regressions. The original
+21-case and expanded 28-case detector datasets and baselines remain unchanged.
+The [review contract](review-contract.md) describes the supported pasted-text formats.
+
 ## Reproduce
 
 ```sh

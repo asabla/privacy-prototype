@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "description": "Authored synthetic review-policy cases for copied HTTP headers and forwarded credentials. The model-only datasets are unchanged. All values are invented, never usable credentials.",
+  "cases": [
+    {
+      "id": "http-authorization",
+      "segments": [
+        "Authorization: Bearer ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\nPublic context: investigate error 404."
+      ]
+    },
+    {
+      "id": "http-proxy-authorization",
+      "segments": [
+        "Proxy-Authorization: Basic ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\nPublic context: investigate error 404."
+      ]
+    },
+    {
+      "id": "http-cookie",
+      "segments": [
+        "Cookie: ",
+        {
+          "label": "secret",
+          "text": "session=example words; preference=light"
+        },
+        "\nPublic context: investigate error 404."
+      ]
+    },
+    {
+      "id": "http-set-cookie",
+      "segments": [
+        "Set-Cookie: session=",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "; Path=/; HttpOnly\nContent-Type: text/plain"
+      ]
+    },
+    {
+      "id": "http-mixed-case",
+      "segments": [
+        "  aUtHoRiZaTiOn:\tBearer ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\n  Content-Type: text/plain"
+      ]
+    },
+    {
+      "id": "http-wrapped-authorization",
+      "segments": [
+        "Authorization: Bearer ",
+        {
+          "label": "secret",
+          "text": "example first\n  example second"
+        },
+        "\nAccept: application/json"
+      ]
+    },
+    {
+      "id": "http-empty-first-line",
+      "segments": [
+        "Authorization:\n\tBearer ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\nPublic context: investigate error 404."
+      ]
+    },
+    {
+      "id": "http-quoted-header",
+      "segments": [
+        "> Authorization: Bearer ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\n> Public context: investigate error 404."
+      ]
+    },
+    {
+      "id": "http-nested-quoted-cookie",
+      "segments": [
+        "> > Cookie: ",
+        {
+          "label": "secret",
+          "text": "session=example words"
+        },
+        "\r\n> > Content-Type: text/plain"
+      ]
+    },
+    {
+      "id": "http-quoted-wrapped-header",
+      "segments": [
+        "> Authorization: Bearer ",
+        {
+          "label": "secret",
+          "text": "example first\n>  example second"
+        },
+        "\n> Accept: application/json"
+      ]
+    },
+    {
+      "id": "http-header-blank-line",
+      "segments": [
+        "Cookie: ",
+        {
+          "label": "secret",
+          "text": "session=example words"
+        },
+        "\n\n  Public context: investigate error 404."
+      ]
+    },
+    {
+      "id": "http-lone-cr",
+      "segments": [
+        "Authorization: Bearer ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\rContent-Type: text/plain"
+      ]
+    },
+    {
+      "id": "forwarded-yaml-literal",
+      "segments": [
+        "> password: |\n>   ",
+        {
+          "label": "secret",
+          "text": "example first\n>   example second"
+        },
+        "\n> public_note: keep this explanation"
+      ]
+    },
+    {
+      "id": "forwarded-yaml-folded",
+      "segments": [
+        ">>   access_token: >-\r\n>>     ",
+        {
+          "label": "secret",
+          "text": "example first\r\n>>\r\n>>     example second"
+        },
+        "\r\n>>   public_note: keep this explanation"
+      ]
+    },
+    {
+      "id": "forwarded-quote-boundary",
+      "segments": [
+        "> password: |\n>   ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\n  public_note: keep this outside the quotation"
+      ]
+    },
+    {
+      "id": "forwarded-more-indented-value",
+      "segments": [
+        "> password: |\n>   ",
+        {
+          "label": "secret",
+          "text": "> example first\n>   example second"
+        },
+        "\n> public_note: keep this explanation"
+      ]
+    },
+    {
+      "id": "forwarded-quoted-key",
+      "segments": [
+        "> 'password': |\n>   ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\n> public_note: keep this explanation"
+      ]
+    },
+    {
+      "id": "yaml-lone-cr",
+      "segments": [
+        "password: |\r  ",
+        {
+          "label": "secret",
+          "text": "example first\r  example second"
+        },
+        "\rpublic_note: keep this explanation"
+      ]
+    },
+    {
+      "id": "unicode-header-offsets",
+      "segments": [
+        "😀 diagnostics\nAuthorization: Bearer ",
+        {
+          "label": "secret",
+          "text": "example words"
+        },
+        "\nPublic context: investigate error 404."
+      ]
+    },
+    {
+      "id": "negative-header-names",
+      "segments": [
+        "Authorization-Status: missing\nCookie-Policy: required\nX-Authorization-Info: public"
+      ]
+    },
+    {
+      "id": "negative-header-description",
+      "segments": [
+        "The authorization header is required. Cookie settings are documented publicly."
+      ]
+    },
+    {
+      "id": "negative-empty-header",
+      "segments": [
+        "Authorization:\nPublic context: investigate error 404."
+      ]
+    },
+    {
+      "id": "negative-forwarded-key",
+      "segments": [
+        "> password_reset: |\n>   send a new link\n> public_note: keep this explanation"
+      ]
+    },
+    {
+      "id": "negative-response-header",
+      "segments": [
+        "WWW-Authenticate: Bearer realm=\"example\"\nContent-Type: text/plain"
+      ]
+    }
+  ]
+}
