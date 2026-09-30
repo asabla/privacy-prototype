@@ -82,13 +82,16 @@ test("Unicode highlights cover exactly the API span", () => {
   dom.window.close();
 });
 
-test("redacted output preserves Unicode and escapes HTML", () => {
-  const dom = new JSDOM(`<div>${renderRedacted(`${redactedBody} <img src=x onerror=alert(1)>`)}</div>`);
-  assert.equal(dom.window.document.querySelector("div").textContent, `${redactedBody} <img src=x onerror=alert(1)>`);
-  assert.equal(dom.window.document.querySelector("img"), null);
-  assert.equal(dom.window.document.querySelector(".redacted-tok").textContent, "[PRIVATE_EMAIL]");
-  dom.window.close();
-});
+for (const placeholder of ["[PRIVATE_EMAIL]", "<PRIVATE_EMAIL>"]) {
+  test(`redacted output preserves Unicode and escapes HTML with ${placeholder}`, () => {
+    const text = `😀 ${placeholder} 👩🏽‍💻 <img src=x onerror=alert(1)>`;
+    const dom = new JSDOM(`<div>${renderRedacted(text)}</div>`);
+    assert.equal(dom.window.document.querySelector("div").textContent, text);
+    assert.equal(dom.window.document.querySelector("img"), null);
+    assert.equal(dom.window.document.querySelector(".redacted-tok").textContent, placeholder);
+    dom.window.close();
+  });
+}
 
 test("load all cancels pending autoplay", async (t) => {
   const ui = await dashboard(t);

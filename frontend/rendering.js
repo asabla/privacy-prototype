@@ -33,8 +33,8 @@ export function highlightText(text, spans) {
 
 export function renderRedacted(redactedText) {
   // The backend owns redaction; only decorate its already-redacted output.
-  return escape(redactedText).replace(/\[([A-Z_]+)\]/g, (placeholder, label) => {
-    const meta = LABEL_META[label.toLowerCase()];
+  return escape(redactedText).replace(/\[([A-Z_]+)\]|&lt;([A-Z_]+)&gt;/g, (placeholder, squareLabel, angleLabel) => {
+    const meta = LABEL_META[(squareLabel || angleLabel).toLowerCase()];
     return meta
       ? `<span class="redacted-tok" style="color:${meta.hex}">${placeholder}</span>`
       : placeholder;
