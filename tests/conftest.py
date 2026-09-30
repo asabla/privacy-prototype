@@ -11,3 +11,5 @@ def isolate_detector(monkeypatch):
     monkeypatch.setitem(sys.modules, "opf", None)
     monkeypatch.setitem(sys.modules, "opf._api", None)
     monkeypatch.setattr(detector, "_detector", None)
+    monkeypatch.delenv("SENTINEL_ENGINE", raising=False)
+    monkeypatch.delenv("SENTINEL_PRELOAD", raising=False)

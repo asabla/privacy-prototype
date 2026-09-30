@@ -1,0 +1,63 @@
+services:
+  sentinel:
+    build: .
+    environment:
+      SENTINEL_API_KEY: ${SENTINEL_API_KEY:?Set a random operator key before starting}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 2
+    ulimits:
+      core: {soft: 0, hard: 0}
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "1"
+        compress: "false"
+    networks: [local_only]
+
+  browser:
+    image: nginxinc/nginx-unprivileged:stable-alpine@sha256:ed04ec1ff34502c339ee5c3ae3f855442398edc1d05591e2b98981dcbbd20b1e
+    entrypoint: [nginx]
+    command: [-g, "daemon off;"]
+    user: "101:101"
+    depends_on:
+      sentinel:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8080"
+    volumes:
+      - ./ops/nginx.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: 1
+    ulimits:
+      core: {soft: 0, hard: 0}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "1"
+        compress: "false"
+    networks: [browser_access, local_only]
+
+networks:
+  browser_access: {}
+  local_only:
+    internal: true

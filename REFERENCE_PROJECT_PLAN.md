@@ -87,5 +87,14 @@ statements for implementation.
   audits. Browser plugin walkthroughs saved and inspected actual downloads for
   support tickets, prompts, and email; clipboard, empty storage, local-only requests,
   and clear/reset were checked. Mobile geometry at 390px has no horizontal overflow.
-  Remote CI and merge remain the next gate for this package.
-- R1–R11 as a whole are not yet proven; W4–W5 remain.
+  Merged as PR #6 after all three CI jobs passed; main updated with rebase.
+- W4 implemented: explicit engine selection, nonempty-inference readiness with
+  failure recovery, preloaded native serving, digest-pinned non-root containers,
+  and an isolated processor behind a loopback proxy. Local gate: 101 Python tests,
+  18 frontend tests, three HTTP workflows, clean package audits, actual restricted
+  Docker execution/restart, and real OPF preload plus 25 inbox examples and three
+  workflows with Python network calls denied. Native `make serve` also passed all
+  three DOM-to-HTTP workflows. The container runtime gate is now included in CI;
+  remote CI and merge are pending for this package.
+- R1–R11 as a whole still require W5's final acceptance audit. JSON-shaped credential
+  assignments were identified as a remaining masking gap for that package.

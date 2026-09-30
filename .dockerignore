@@ -1,0 +1,12 @@
+# Allow only application source and the locked dependency manifests into the build.
+*
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!backend/
+!backend/*.py
+!frontend/
+!frontend/*.html
+!frontend/*.css
+!frontend/*.js
+!frontend/*.svg
