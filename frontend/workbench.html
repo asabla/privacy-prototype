@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sentinel — Privacy workbench</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <link rel="stylesheet" href="/assets/workbench.css" />
+</head>
+<body class="workbench">
+  <a class="skip-link" href="#workspace">Skip to workspace</a>
+  <header class="topbar">
+    <a class="brand" href="/workbench" aria-label="Sentinel privacy workbench">
+      <span class="logo" aria-hidden="true">S</span>
+      <span><span class="brand-name">Sentinel</span><span class="brand-sub">Sensitive data, considered.</span></span>
+    </a>
+    <nav aria-label="Main navigation"><a href="/">Synthetic inbox</a><button class="btn" id="clearAll">Clear this session</button></nav>
+  </header>
+  <main class="workbench-container" id="workspace">
+    <section class="workbench-hero">
+      <div><p class="eyebrow">A reference for handling sensitive data</p><h1>Keep the context.<br /><span>Reduce the exposure.</span></h1>
+        <p class="hero-description">Prepare a ticket, prompt, or email for sharing. Find sensitive content, fill in the gaps, and review exactly what leaves your workspace.</p></div>
+      <aside class="boundary-note"><span class="boundary-symbol" aria-hidden="true">↳</span><strong>You decide what leaves.</strong><p>Analysis runs on this service. No email is sent and no external AI provider receives your text. Downloads and clipboard copies happen only when you choose.</p></aside>
+    </section>
+
+    <details class="connection panel" id="connectionPanel" open>
+      <summary>Service connection <span id="connectionState">Locked</span></summary>
+      <div class="connection-body">
+        <div><label for="operatorKey">Operator access key</label><input id="operatorKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" aria-describedby="keyHelp" />
+          <p id="keyHelp">Use the key configured for this server. It stays in this tab's memory and is cleared with the session.</p></div>
+        <button class="btn btn-primary" id="connect">Connect</button>
+        <p id="connectionMessage">The synthetic inbox works without a key. Submitted text requires an operator connection.</p>
+      </div>
+    </details>
+
+    <fieldset class="use-case-options"><legend>What are you preparing?</legend>
+      <label class="use-case-card"><input type="radio" name="useCase" value="support_ticket" checked /><span class="case-number">01</span><strong>Share a support ticket</strong><span>Keep the issue. Remove customer details.</span></label>
+      <label class="use-case-card"><input type="radio" name="useCase" value="ai_prompt" /><span class="case-number">02</span><strong>Prepare an AI prompt</strong><span>Keep repeated references consistent.</span></label>
+      <label class="use-case-card"><input type="radio" name="useCase" value="email" /><span class="case-number">03</span><strong>Review an email</strong><span>Consider the message and its routing.</span></label>
+    </fieldset>
+
+    <ol class="workflow-steps" aria-label="Review progress">
+      <li id="stepInput" aria-current="step"><span>1</span> Add content</li><li id="stepReview"><span>2</span> Inspect &amp; refine</li><li id="stepExport"><span>3</span> Review &amp; export</li>
+    </ol>
+    <p id="status" class="workbench-status" role="status" aria-live="polite">Start with a synthetic sample or your own text.</p>
+
+    <div class="workspace-columns">
+      <section class="panel input-panel" aria-labelledby="inputHeading">
+        <div class="workbench-panel-heading"><div><p class="eyebrow">Original · sensitive</p><h2 id="inputHeading">Source content</h2></div><button class="btn" id="loadSample">Load sample</button></div>
+        <p class="field-help">This content is sent to the service only when you choose Analyze. Editing it clears the previous review and manual masks.</p>
+        <div id="sourceFields"></div>
+        <div class="input-footer"><span id="characterCount">0 / 16,000 characters</span><button class="btn btn-primary" id="analyze" disabled>Analyze content</button></div>
+      </section>
+      <section class="panel candidate-panel" aria-labelledby="candidateHeading">
+        <div class="workbench-panel-heading"><div><p class="eyebrow">Candidate · review required</p><h2 id="candidateHeading">What you could share</h2></div><span id="engine" class="engine-badge">Not connected</span></div>
+        <div id="candidateEmpty" class="empty-candidate"><span aria-hidden="true">◈</span><h3>A considered version starts here.</h3><p>Analyze your content to see suggested redactions. No findings does not mean there is nothing sensitive.</p></div>
+        <div id="candidateFields" hidden></div>
+        <p id="candidateMeta" class="field-help"></p>
+        <p id="routingNotice" class="routing-notice" hidden></p>
+      </section>
+    </div>
+
+    <section class="panel refinement-panel" aria-labelledby="refineHeading">
+      <div class="workbench-panel-heading"><div><p class="eyebrow">Human context matters</p><h2 id="refineHeading">Catch what the detector missed</h2></div><span id="findingCount">No analysis yet</span></div>
+      <p class="field-help">Review the whole candidate, especially names, identifiers, and context. Add a mask for any missed text. Automatic masks remain in place.</p>
+      <div class="mask-controls"><div><label for="maskField">Field</label><select id="maskField"></select></div><div><label for="maskText">Exact text to mask</label><input id="maskText" type="text" autocomplete="off" spellcheck="false" /></div><button class="btn" id="addMask">Add mask for every match</button></div>
+      <ul id="manualMasks" class="manual-masks" aria-label="Manual masks"></ul>
+      <details id="findingsDetail"><summary>Inspect detected ranges</summary><p class="field-help">Choose a finding to select its original text. Ranges use Unicode code points.</p><ul id="findings" class="findings"></ul></details>
+    </section>
+
+    <section class="panel export-panel" aria-labelledby="exportHeading">
+      <div><p class="eyebrow">An explicit decision</p><h2 id="exportHeading">Review before it leaves</h2><p>Redaction can miss details and context. This is data minimization, not a guarantee of anonymity.</p>
+        <label class="review-confirmation"><input id="reviewConfirmed" type="checkbox" disabled /><span>I reviewed every candidate field and accept the remaining content for this use.</span></label>
+        <p id="receiptStatus" class="field-help">Analyze content before confirming a review.</p></div>
+      <div class="export-actions"><button class="btn btn-primary" id="approveExport" disabled>Confirm review</button><button class="btn" id="download" disabled>Download reviewed text</button><button class="btn" id="copy" disabled>Copy reviewed text</button></div>
+    </section>
+    <footer class="workbench-footer"><p>Transient processing · No raw-text database · One configured operator</p><p>Clear removes this tab's input, results, and key. Downloads and clipboard content remain under your control. Server memory is not securely erased.</p></footer>
+  </main>
+  <script type="module" src="/assets/workbench-entry.js"></script>
+</body>
+</html>

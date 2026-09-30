@@ -1,8 +1,8 @@
 # Prepare, review, export
 
-These authenticated endpoints turn detection into three explicit review workflows.
-The workbench UI is a separate work package; the API can already be exercised from
-a client with the [configured operator key](service-boundary.md).
+These authenticated endpoints power the three workbench workflows at `/workbench`.
+They can also be exercised from a client with the
+[configured operator key](service-boundary.md).
 
 ## Use cases and policy
 

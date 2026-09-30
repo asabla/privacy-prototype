@@ -56,6 +56,8 @@ def test_authentication_and_minimized_response(client):
         ("Authorization", "Bearer wrong"), ("Authorization", client.headers["Authorization"]),
     ])
     assert duplicate.status_code == 401
+    assert client.get("/api/session").status_code == 200
+    assert client.get("/api/session", headers={"Authorization": "Bearer wrong"}).status_code == 401
 
 
 @pytest.mark.parametrize("payload", [

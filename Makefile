@@ -4,7 +4,7 @@ OPF_EXTRA = $(if $(wildcard .opf-enabled),--extra opf)
 OPF_TEST_ENV ?= .venv-opf
 EVAL_ARGS ?=
 
-.PHONY: help install run dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js audit audit-python audit-js check eval eval-opf test-opf
+.PHONY: help install run dev scan open install-opf uninstall-opf engine clean reset lock test test-python test-js test-workbench-api audit audit-python audit-js check eval eval-opf test-opf
 
 help:  ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -21,7 +21,7 @@ run: install  ## Start the server on $PORT (default 8000)
 dev: run  ## Alias for `run`
 
 open:  ## Open the app in the default browser
-	@open http://127.0.0.1:$(PORT)
+	@open http://127.0.0.1:$(PORT)/workbench
 
 engine: install  ## Print which detection engine is active
 	@uv run --no-sync python -c "from backend.detector import get_detector; d = get_detector(); print(d.engine_detail)"
@@ -39,7 +39,7 @@ uninstall-opf:  ## Remove OPF from the venv (back to heuristic mode)
 	@rm -f .opf-enabled
 	@echo "Heuristic mode enabled."
 
-test: test-python test-js  ## Run backend and frontend regression tests
+test: test-python test-js test-workbench-api  ## Run backend, frontend, and HTTP integration tests
 
 test-python: install
 	uv run --no-sync pytest -q
@@ -47,6 +47,9 @@ test-python: install
 test-js:
 	npm ci
 	npm test
+
+test-workbench-api: install test-js  ## Exercise the actual workbench against authenticated HTTP
+	uv run --no-sync python -m evaluation.workbench_smoke
 
 eval: install  ## Score the heuristic against the reviewed synthetic baseline
 	uv run --no-sync python -m evaluation.run --engine heuristic --baseline evaluation/heuristic-baseline.json $(EVAL_ARGS)

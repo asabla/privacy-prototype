@@ -1,19 +1,33 @@
-# Sentinel — Email Privacy Scanner
+# Sentinel — Sensitive-data workbench
 
-A local proof-of-concept for exploring potential privacy risks in a synthetic corporate inbox. It scans a fixed corpus, then replays the results with direction (inbound / outbound / internal), example domain ownership, and detected spans in the subject and body.
+A local reference application for preparing sensitive text for human-reviewed
+sharing. Use the workbench for support tickets, AI prompts, and email, or explore
+the synthetic inbox to compare detection findings and recipient relationships.
 
 Detection runs through [OpenAI's Privacy Filter (`opf`)](https://github.com/openai/privacy-filter) when it is installed in the venv, and falls back to a regex heuristic so the demo boots on a fresh machine. The active engine is shown in the top-right corner of the dashboard.
 
-## Current use case
+## Workflows
 
-A developer or privacy reviewer can compare the two engines, inspect detected spans,
-and discuss which outbound messages would deserve human review. The dashboard's
+| Workflow | What it demonstrates |
+| --- | --- |
+| Share a support ticket | Minimize customer details, add manual masks for missed content, and download a reviewed ticket |
+| Prepare an AI prompt | Preserve repeated references through per-request placeholders; review and copy without calling an external AI provider |
+| Review an email | Remove routing fields, minimize subject and body, and export the whole reviewed message |
+
+Every workflow requires an operator key and explicit review. Source edits invalidate
+previous results; downloads must match the exact candidate approved. Clear removes
+input, results, manual masks, and the key from the tab. The server keeps only keyed
+fingerprints and bounded metadata between review requests, with no raw-text database.
+See the [guided showcase](docs/showcase.md) and [review API contract](docs/review-contract.md).
+
+The synthetic inbox at `/` lets a developer or privacy reviewer compare engines,
+inspect spans, and discuss which outbound messages deserve attention. Its
 "Leak risk" means that an outbound sample contains detected sensitive content and
 has an external recipient. It is a review signal, not evidence of a policy violation.
 "No findings" does not establish that a message is safe.
 
 The app has no mailbox connection, delivery interception, blocking, quarantine,
-attachment scanning, or persistent review workflow. The inbox and employee directory
+attachment scanning, or durable review history. The inbox and employee directory
 are synthetic. Detection runs locally; installing dependencies and the first OPF
 scan can download packages, tokenizer data, and model weights. The dashboard uses
 system fonts and does not request third-party web assets.
@@ -27,9 +41,9 @@ for authentication, limits, response contracts, and deployment requirements.
 
 The [reference-project plan](REFERENCE_PROJECT_PLAN.md) tracks the remaining work
 for support-ticket sharing, AI-prompt preparation, and email review/export.
-The authenticated [review API](docs/review-contract.md) implements these policies,
-manual masks, and one-use reviewed exports. The existing inbox remains a synthetic
-inspection view; the interactive workbench is still being built.
+The authenticated [workbench](http://127.0.0.1:8000/workbench) implements these
+policies, manual masks, and one-use reviewed exports. The inbox remains a synthetic
+inspection view.
 
 ### Decisions needed before a real-mail pilot
 
@@ -45,6 +59,14 @@ inspection view; the interactive workbench is still being built.
   bounds are implemented, but workload capacity is not established by unit tests.
 
 ## Screenshots
+
+### Reviewed support ticket
+
+![Reviewed support ticket](docs/workbench-reviewed-ticket.png)
+
+### Email review with minimized routing
+
+![Email review](docs/workbench-email-review.png)
 
 ### Replay dashboard
 A simulated inbox streams past with per-direction counts, PII label breakdowns, and sensitivity badges.
@@ -75,9 +97,15 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.14 (uv will download it i
 
 ```bash
 make install       # uv sync --locked — creates .venv from uv.lock
+export SENTINEL_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 make run           # starts uvicorn on :8000 with reload
-make open          # opens http://127.0.0.1:8000 in the browser
+make open          # opens http://127.0.0.1:8000/workbench
 ```
+
+Enter the configured key in the workbench, connect, and load a sample. See the
+[showcase guide](docs/showcase.md) for transferring the key without printing it.
+Without a key, the synthetic inbox still works at `/`; submitted-text processing
+is disabled. The key is one operator principal, not a multi-user identity system.
 
 Or without `make`:
 
@@ -121,6 +149,7 @@ to the Makefile commands.
 ```bash
 make test           # Python/API/engine-workflow tests, then frontend DOM tests
 make check          # tests plus Python and npm vulnerability audits
+make test-workbench-api  # actual workbench DOM against an authenticated HTTP service
 ```
 
 Tests require Node.js 22.22.2, 24.15+, or 26+ in addition to Python and uv. Frontend test
@@ -128,6 +157,10 @@ dependencies are development-only; serving the UI still requires no build step.
 GitHub Actions runs `make check` with Python 3.14 and Node 24, with additional UI
 tests on Node 22.22.2 and 26. Tests use synthetic data and an offline OPF
 test double, so they do not download model weights or verify real model inference.
+The workbench HTTP integration tests start a temporary loopback service with a
+generated key, exercise all three workflows through review/download/copy/reset,
+and stop the service. They compare exported bytes and API payloads, including
+manual masks and receipt replay rejection.
 
 The Python audit exports locked default, development, and optional OPF dependencies
 and checks registry packages applicable to the current platform without installing

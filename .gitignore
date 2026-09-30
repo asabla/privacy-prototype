@@ -7,3 +7,4 @@ node_modules/
 .opf-enabled
 .opf-src/
 .pytest_cache/
+.playwright-mcp/

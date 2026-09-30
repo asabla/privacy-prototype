@@ -57,7 +57,8 @@ def test_scan_api_redacts_sensitive_text_and_defines_offsets(client):
 
 
 def test_corpus_aggregates_and_served_assets(client):
-    for path in ["/", "/assets/app.js", "/assets/rendering.js", "/assets/styles.css"]:
+    for path in ["/", "/workbench", "/assets/workbench.js", "/assets/workbench.css",
+                 "/assets/app.js", "/assets/rendering.js", "/assets/styles.css"]:
         assert client.get(path).status_code == 200
     corpus = client.get("/api/corpus").json()["emails"]
     data = client.get("/api/scan-all").json()
