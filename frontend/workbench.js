@@ -43,6 +43,7 @@ export function mountWorkbench({ document, window, fetch }) {
   let connected = false;
   let busy = false;
   let revision = 0;
+  let connectionRevision = 0;
   let result = null;
   let exported = null;
   let masks = [];
@@ -253,6 +254,7 @@ export function mountWorkbench({ document, window, fetch }) {
     }
   }
   function clearSession() {
+    connectionRevision += 1;
     invalidate({ clearMasks: true });
     window.clearTimeout(idleTimer);
     connected = false;
@@ -273,11 +275,11 @@ export function mountWorkbench({ document, window, fetch }) {
 
   $("connect").addEventListener("click", async () => {
     if (!key()) { $("connectionMessage").textContent = "Enter the configured operator key."; return; }
-    const requestRevision = revision;
+    const requestRevision = connectionRevision;
     $("connect").disabled = true;
     try {
       const session = await api("/api/session");
-      if (requestRevision !== revision) return;
+      if (requestRevision !== connectionRevision) return;
       connected = true;
       $("connectionState").textContent = "Connected";
       $("connectionMessage").textContent = "Connected. The key is kept only in this tab. Clear the session when finished.";
@@ -285,13 +287,14 @@ export function mountWorkbench({ document, window, fetch }) {
       $("engine").textContent = session.engine === "opf" ? "Privacy Filter" : "Heuristic demo";
       status("Connected. Load a sample or enter content, then analyze it.");
     } catch (error) {
-      if (requestRevision === revision) $("connectionMessage").textContent = ERROR_MESSAGES[error.code] || "Could not connect to the service. Check that it is running.";
+      if (requestRevision === connectionRevision) $("connectionMessage").textContent = ERROR_MESSAGES[error.code] || "Could not connect to the service. Check that it is running.";
     } finally {
       $("connect").disabled = false;
       syncControls();
     }
   });
   $("operatorKey").addEventListener("input", () => {
+    connectionRevision += 1;
     invalidate({ accessKey: previousKey });
     previousKey = key();
     connected = false;
