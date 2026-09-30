@@ -65,7 +65,7 @@ def main(*, preload: bool = False) -> None:
                 validate_scan(result["scan"][part])
         workflows = [
             ("support_ticket", {"text": sample}),
-            ("ai_prompt", {"text": 'Summarize this example: password="example words"; token=demo'}),
+            ("ai_prompt", {"text": 'Summarize this example: {"password": "example words", "api_key": "demo"}'}),
             ("email", {"sender": "Alice <alice@northwind.io>", "recipients": "Bob <bob@example.com>",
                        "subject": "Support request", "body": sample}),
         ]
